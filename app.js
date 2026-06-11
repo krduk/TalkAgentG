@@ -932,9 +932,18 @@ function setupVisualViewport() {
                 container.style.height = `${viewportHeight}px`;
             }
             
-            // Force reset any window scrolling caused by focus
+            // Force reset any window scrolling multiple times with delay to counter OS auto-scrolling
             window.scrollTo(0, 0);
             document.body.scrollTop = 0;
+            
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+            }, 30);
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+            }, 100);
             
             // Keep chat scrolled to bottom
             setTimeout(scrollToBottom, 50);
@@ -950,6 +959,16 @@ function setupVisualViewport() {
     window.visualViewport.addEventListener('resize', handleViewportChange);
     window.visualViewport.addEventListener('scroll', handleViewportChange);
     
+    // Prevent document-level scrolling entirely on mobile
+    document.addEventListener('scroll', () => {
+        if (window.innerWidth <= 900) {
+            if (window.scrollY !== 0 || window.scrollX !== 0) {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+            }
+        }
+    });
+
     // Initial call to set size correctly
     handleViewportChange();
 }
