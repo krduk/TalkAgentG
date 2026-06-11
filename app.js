@@ -309,6 +309,12 @@ function handleFormSubmit(e) {
     // Sync HUD status
     updateHUD('PROCESSING');
     
+    // Unlock SpeechSynthesis for mobile/modern browsers (Autoplay restriction workaround)
+    if (config.voiceEnabled && 'speechSynthesis' in window) {
+        const unlockUtterance = new SpeechSynthesisUtterance('');
+        window.speechSynthesis.speak(unlockUtterance);
+    }
+    
     // Get AI response
     typingIndicator.classList.remove('hidden');
     
@@ -535,18 +541,32 @@ function speak(text) {
     if (!('speechSynthesis' in window)) return;
     
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ja-JP';
     
-    const voices = window.speechSynthesis.getVoices();
-    const jaVoice = voices.find(voice => voice.lang.startsWith('ja') && (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.name.includes('Female')));
-    
-    if (jaVoice) utterance.voice = jaVoice;
-    
-    utterance.pitch = 1.2; // Slightly higher pitch for anime style
-    utterance.rate = 1.05;
-    
-    window.speechSynthesis.speak(utterance);
+    // Clean up markdown syntax and URLs for cleaner speech output
+    let cleanText = text
+        .replace(/[*#_~`>]/g, '') // Remove markdown formatting characters
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert markdown links to plain text
+        .replace(/https?:\/\/\S+/g, 'URL') // Replace raw URLs with "URL"
+        .trim();
+        
+    if (!cleanText) return;
+
+    // A small timeout is needed on some platforms (like iOS Safari) 
+    // after cancel() for the browser to accept new utterances.
+    setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'ja-JP';
+        
+        const voices = window.speechSynthesis.getVoices();
+        const jaVoice = voices.find(voice => voice.lang.startsWith('ja') && (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.name.includes('Female')));
+        
+        if (jaVoice) utterance.voice = jaVoice;
+        
+        utterance.pitch = 1.2; // Slightly higher pitch for anime style
+        utterance.rate = 1.05;
+        
+        window.speechSynthesis.speak(utterance);
+    }, 50);
 }
 
 // Utility: HUD Update
