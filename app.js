@@ -186,6 +186,18 @@ function setupEventListeners() {
 
     // Mobile input focus scroll jump fix
     userInput.addEventListener('focus', () => {
+        if (window.innerWidth <= 900) {
+            const container = document.querySelector('.app-container');
+            if (container) {
+                // Instantly scale down the viewport height to prevent the OS auto-scrolling
+                container.style.height = `${window.innerHeight - 300}px`;
+            }
+        }
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            scrollToBottom();
+        }, 30);
         setTimeout(() => {
             window.scrollTo(0, 0);
             document.body.scrollTop = 0;
@@ -194,10 +206,17 @@ function setupEventListeners() {
     });
 
     userInput.addEventListener('blur', () => {
+        if (window.innerWidth <= 900) {
+            const container = document.querySelector('.app-container');
+            if (container) {
+                // Restore height
+                container.style.height = '100%';
+            }
+        }
         setTimeout(() => {
             window.scrollTo(0, 0);
             document.body.scrollTop = 0;
-        }, 100);
+        }, 50);
     });
 
     // Modals
