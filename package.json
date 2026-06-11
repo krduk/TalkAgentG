@@ -1,0 +1,12 @@
+{
+  "name": "elena-chat",
+  "version": "1.0.0",
+  "description": "Futuristic 2D Secretary Agent Chat Interface",
+  "main": "app.js",
+  "scripts": {
+    "dev": "npx -y serve .",
+    "start": "npx -y serve ."
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
