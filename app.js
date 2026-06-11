@@ -21,7 +21,8 @@ let config = {
     googleClientId: '',
     soundEnabled: true,
     voiceEnabled: false,
-    systemPrompt: DEFAULT_SYSTEM_PROMPT
+    systemPrompt: DEFAULT_SYSTEM_PROMPT,
+    userName: 'OPERATOR'
 };
 
 let chatHistory = [];
@@ -47,6 +48,8 @@ const soundStatusDisplay = document.getElementById('soundStatusDisplay');
 const syncBar = document.getElementById('syncBar').querySelector('.stat-fill');
 
 // Settings Inputs
+const userNameInput = document.getElementById('userNameInput');
+const promptPrefix = document.getElementById('promptPrefix');
 const apiKeyInput = document.getElementById('apiKeyInput');
 const modeSelect = document.getElementById('modeSelect');
 const geminiModelSelect = document.getElementById('geminiModelSelect');
@@ -92,6 +95,7 @@ function loadSettings() {
 
 // Save Settings to LocalStorage
 function saveSettings() {
+    config.userName = userNameInput.value.trim() || 'OPERATOR';
     config.apiKey = apiKeyInput.value.trim();
     config.mode = modeSelect.value;
     config.geminiModel = geminiModelSelect.value;
@@ -117,6 +121,10 @@ function saveSettings() {
 
 // Update UI States Based on Settings
 function updateUIFromSettings() {
+    userNameInput.value = config.userName || 'OPERATOR';
+    if (promptPrefix) {
+        promptPrefix.textContent = `${config.userName}>`;
+    }
     apiKeyInput.value = config.apiKey;
     modeSelect.value = config.mode;
     geminiModelSelect.value = config.geminiModel || 'gemini-3.1-flash-lite';
@@ -293,7 +301,7 @@ function appendUserMessage(text) {
     messageDiv.className = 'message user-msg';
     
     messageDiv.innerHTML = `
-        <div class="msg-sender">OPERATOR></div>
+        <div class="msg-sender">${escapeHTML(config.userName)}></div>
         <div class="msg-bubble">${escapeHTML(text)}</div>
     `;
     
@@ -413,6 +421,7 @@ async function getGeminiResponse(userText) {
 [SYSTEM_CONTEXT]
 CURRENT_TIME: ${localTimeStr}
 CURRENT_LOCATION: Tokyo, Japan
+OPERATOR_NAME: ${config.userName}
 
 [GOOGLE_CALENDAR_EVENTS]
 ${calendarEventsText}
@@ -421,7 +430,8 @@ ${calendarEventsText}
 1. 連携されていないデータ（天気予報など）について聞かれた場合は、情報を創作（でっち上げ）せず、簡潔に「現在データが同期されていない」旨を伝えてください。
 2. 天気などを聞かれた際、場所や日時が不明でも聞き返さず、想定地（東京）の季節（例えば6月なら梅雨）や現在の時間帯に合わせた一般的なアドバイスや、カレンダーへの予定登録などを提案してください。
 3. カレンダーに関しては[GOOGLE_CALENDAR_EVENTS]セクションに記載された本物のデータのみを正として扱い、予定をでっち上げてはいけません。カレンダーが未同期（「同期されていません」とある）の場合は、架空の予定を告げず、カレンダーが未連携である旨を報告して設定からのリンクを促してください。
-4. ユーザーの利便性を最優先し、SF的なロールプレイ表現で嘘 ofデータ（でっち上げの予定や架空の気象情報など）を報告しないようにしてください。`;
+4. ユーザーの利便性を最優先し、SF的なロールプレイ表現で嘘 ofデータ（でっち上げの予定や架空の気象情報など）を報告しないようにしてください。
+5. 対話相手であるオペレーター（ユーザー）の名前は「${config.userName}」です。キャラクターの性格（ギャルオペレーター・ルナ）を維持しつつ、必要に応じてこの名前、または親しみを込めて「先輩」と呼んで話しかけてください。`;
 
     const payload = {
         contents: contents,

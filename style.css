@@ -536,6 +536,7 @@ body {
 .modal-content.retro-window {
     width: 500px;
     max-width: 90%;
+    max-height: 90vh;
 }
 
 .close-btn {
@@ -553,6 +554,7 @@ body {
     flex-direction: column;
     gap: 15px;
     background-color: #000018;
+    overflow-y: auto;
 }
 
 .settings-group {
@@ -702,9 +704,15 @@ textarea {
     }
     .portrait-section {
         max-width: 100%;
-        height: 320px;
+        height: auto;
+    }
+    .portrait-container {
+        max-height: 250px;
+    }
+    .system-monitor-panel {
+        display: none;
     }
     .chat-section {
-        height: 400px;
+        height: 480px;
     }
 }

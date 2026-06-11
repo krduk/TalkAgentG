@@ -128,7 +128,7 @@
                             </span>
                         </div>
                         <form id="chatForm" class="chat-form">
-                            <span class="prompt-prefix">OPERATOR></span>
+                            <span id="promptPrefix" class="prompt-prefix">OPERATOR></span>
                             <textarea id="userInput" placeholder="コマンドを入力..." autocomplete="off" rows="1"></textarea>
                             <button type="submit" id="sendBtn" class="send-btn">
                                 [EXEC]
@@ -148,6 +148,11 @@
                 <span class="close-btn">[ X ]</span>
             </div>
             <div class="modal-body">
+                <div class="settings-group">
+                    <label for="userNameInput">> OPERATOR_NAME (あなたの名前)</label>
+                    <input type="text" id="userNameInput" placeholder="OPERATOR">
+                </div>
+
                 <div class="settings-group">
                     <label for="apiKeyInput">> GEMINI_API_KEY</label>
                     <div class="input-with-icon">
