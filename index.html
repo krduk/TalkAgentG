@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEC PC-9801 - ELENA LINK SYSTEM</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=VT323&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Identity Services SDK for Google Calendar integration -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+</head>
+<body>
+    <!-- CRT Screen Overlay Effects -->
+    <div class="crt-screen">
+        <div class="cyber-grid"></div>
+        <div class="scanlines"></div>
+        <div class="crt-flicker"></div>
+        <div class="crt-vignette"></div>
+
+        <div class="app-container">
+            <!-- Header (Retro BIOS Style) -->
+            <header class="app-header">
+                <div class="logo-area">
+                    <span class="logo-text">>_ C.O.S.M.O.S.<span class="hide-mobile"> SYSTEM [ROM v1.98]</span></span>
+                </div>
+                <div class="system-status">
+                    <span class="status-indicator online"></span>
+                    <span id="systemStatusText" class="status-text">LUNA: READY</span>
+                </div>
+                <button id="settingsBtn" class="header-btn" title="システム設定">
+                    [ SETTINGS ]
+                </button>
+            </header>
+
+            <!-- Main CRT Workspace -->
+            <main class="main-content">
+                <!-- Left: Pixel Art Portrait Window -->
+                <section class="portrait-section retro-window">
+                    <div class="window-title-bar">
+                        <span class="window-title">PORTRAIT: LUNA_OP</span>
+                        <span class="window-controls">■</span>
+                    </div>
+                    
+                    <div id="portraitContainer" class="portrait-container">
+                        <img id="characterPortrait" src="assets/elena_mono_low.png" alt="Elena Pixel Art" class="portrait-image">
+                    </div>
+
+                    <!-- System Diagnostics Panel to fill the empty space -->
+                    <div class="system-monitor-panel">
+                        <div class="window-title-bar sub-bar">
+                            <span class="window-title">SYSTEM_MONITOR.SYS</span>
+                        </div>
+                        <div class="monitor-content">
+                            <div class="monitor-line">
+                                <span class="m-label">CPU LOAD</span>
+                                <span id="cpuVal" class="m-val">08%</span>
+                                <div class="m-bar"><div id="cpuBar" class="m-fill" style="width: 8%;"></div></div>
+                            </div>
+                            <div class="monitor-line">
+                                <span class="m-label">RAM FREE</span>
+                                <span id="ramVal" class="m-val">640KB</span>
+                                <div class="m-bar"><div class="m-fill" style="width: 100%;"></div></div>
+                            </div>
+                            <div class="monitor-line">
+                                <span class="m-label">SYS SYNC</span>
+                                <span id="syncRateVal" class="m-val">85%</span>
+                                <div class="m-bar"><div id="syncRateBar" class="m-fill" style="width: 85%;"></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="portrait-hud-bottom">
+                        <div class="hud-box">
+                            <span class="hud-label">EMOTION:</span>
+                            <span id="emotionDisplay" class="hud-value neon-blue">STABLE</span>
+                        </div>
+                        <div class="hud-box">
+                            <span class="hud-label">BEEP SOUND:</span>
+                            <span id="soundStatusDisplay" class="hud-value">ON</span>
+                        </div>
+                        <div class="hud-stat">
+                            <span class="stat-name">SYNC-RATE</span>
+                            <div id="syncBar" class="stat-bar"><div class="stat-fill" style="width: 85%;"></div></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Right: Chat Terminal Window -->
+                <section class="chat-section retro-window">
+                    <div class="window-title-bar">
+                        <span class="window-title">TERMINAL: CHAT_LOG</span>
+                        <span class="window-controls">■</span>
+                    </div>
+
+                    <div id="chatMessages" class="chat-messages">
+                        <!-- Welcome Message -->
+                        <div class="message system-msg">
+                            <div class="msg-content">
+                                *** SYSTEM LINK ESTABLISHED ***<br>
+                                *** MODEL: GEMINI EMULATION ONLINE ***
+                            </div>
+                        </div>
+                        
+                        <div class="message character-msg">
+                            <div class="msg-bubble-wrapper">
+                                <div class="msg-sender">[ LUNA ]</div>
+                                <div class="msg-bubble">
+                                    <div class="typewriter-text">お疲れー、先輩！今日からサポート担当する18歳ギャルオペレーターのルナだよ！システムコマンドでも何でもフランクに入力しちゃってね！</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chat-input-area">
+                        <div class="input-hud">
+                            <span id="typingIndicator" class="typing-indicator hidden">
+                                █ PROCESSING INPUT...
+                            </span>
+                        </div>
+                        <form id="chatForm" class="chat-form">
+                            <span id="promptPrefix" class="prompt-prefix">OPERATOR></span>
+                            <textarea id="userInput" placeholder="コマンドを入力..." autocomplete="off" rows="1"></textarea>
+                            <button type="submit" id="sendBtn" class="send-btn">
+                                [EXEC]
+                            </button>
+                        </form>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content retro-window">
+            <div class="window-title-bar">
+                <span class="window-title">SYS_CONFIG.EXE</span>
+                <span class="close-btn">[ X ]</span>
+            </div>
+            <div class="modal-body">
+                <div class="settings-group">
+                    <label for="userNameInput">> OPERATOR_NAME (あなたの名前)</label>
+                    <input type="text" id="userNameInput" placeholder="OPERATOR">
+                </div>
+
+                <div class="settings-group">
+                    <label for="apiKeyInput">> GEMINI_API_KEY</label>
+                    <div class="input-with-icon">
+                        <input type="password" id="apiKeyInput" placeholder="Enter API Key...">
+                    </div>
+                    <p class="settings-help">
+                        ※ APIキーはブラウザに安全に保存されます。<br>
+                        Google AI Studioから<strong>無料</strong>で取得可能です。
+                        <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">[ キーを取得する ]</a>
+                    </p>
+                </div>
+
+                <div class="settings-group">
+                    <label for="modeSelect">> COM_MODE</label>
+                    <select id="modeSelect">
+                        <option value="api">1. GEMINI_API (高品質対話)</option>
+                        <option value="mock">2. LOCAL_SIM (オフライン・モック)</option>
+                    </select>
+                </div>
+
+                <div class="settings-group">
+                    <label for="geminiModelSelect">> GEMINI_MODEL</label>
+                    <select id="geminiModelSelect">
+                        <option value="gemini-3.1-flash-lite">1. gemini-3.1-flash-lite (推奨・軽量)</option>
+                        <option value="gemini-3.1-flash">2. gemini-3.1-flash (標準)</option>
+                        <option value="gemini-2.0-flash">3. gemini-2.0-flash (旧高速モデル)</option>
+                        <option value="gemini-1.5-flash-latest">4. gemini-1.5-flash-latest (レガシー)</option>
+                    </select>
+                </div>
+
+                <div class="settings-group">
+                    <label for="agentColorSelect">> AGENT_COLOR_MODE</label>
+                    <select id="agentColorSelect">
+                        <option value="green">1. GREEN MONITOR (緑単色 - 推奨)</option>
+                        <option value="amber">2. AMBER MONITOR (琥珀単色)</option>
+                        <option value="cyan">3. CYAN MONITOR (シアン単色)</option>
+                        <option value="mono">4. MONOCHROME (白黒2値風)</option>
+                        <option value="default">5. FULL COLOR (オリジナル)</option>
+                    </select>
+                </div>
+
+                <div class="settings-group">
+                    <label for="soundToggle">> SOUND_BEEP (タイプ音)</label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="soundToggle" checked>
+                        <label for="soundToggle" class="switch-slider"></label>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <label for="voiceToggle">> VOICE_SYNTH (音声合成読み上げ)</label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="voiceToggle">
+                        <label for="voiceToggle" class="switch-slider"></label>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <label for="googleClientIdInput">> GOOGLE_CLIENT_ID (カレンダー同期用)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="googleClientIdInput" placeholder="Enter Client ID...">
+                        <button id="googleLinkBtn" class="retro-btn" type="button" style="flex-shrink: 0;">[ LINK_ACC ]</button>
+                    </div>
+                    <p class="settings-help">
+                        Google Cloud Console で作成した Web アプリ用 OAuth クライアントID（承認済みのJavaScript生成元に <code>http://localhost:3000</code> を追加したもの）を入力して連携します。
+                    </p>
+                </div>
+
+                <div class="settings-group">
+                    <label for="systemPromptInput">> SYS_INSTRUCTION (プロンプト)</label>
+                    <textarea id="systemPromptInput" rows="4"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="clearChatBtn" class="retro-btn danger">[ LOG_CLEAR ]</button>
+                <button id="saveSettingsBtn" class="retro-btn">[ SAVE_CONFIG ]</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('ServiceWorker registered:', reg))
+                    .catch(err => console.log('ServiceWorker registration failed:', err));
+            });
+        }
+    </script>
+    <script src="app.js"></script>
+</body>
+</html>
