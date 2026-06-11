@@ -193,6 +193,13 @@ function setupEventListeners() {
         }, 120);
     });
 
+    userInput.addEventListener('blur', () => {
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+        }, 100);
+    });
+
     // Modals
     settingsBtn.addEventListener('click', openModal);
     closeBtn.addEventListener('click', closeModal);
@@ -910,4 +917,39 @@ function initDefaultHistory() {
         role: 'model',
         text: 'お疲れー、先輩！今日からサポート担当する18歳ギャルオペレーターのルナだよ！システムコマンドでも何でもフランクに入力しちゃってね！'
     }];
+}
+
+// Setup Visual Viewport for Mobile Keyboard Layout Fix
+function setupVisualViewport() {
+    if (!window.visualViewport) return;
+
+    const handleViewportChange = () => {
+        // Only apply viewport scaling on mobile devices (width <= 900px)
+        if (window.innerWidth <= 900) {
+            const viewportHeight = window.visualViewport.height;
+            const container = document.querySelector('.app-container');
+            if (container) {
+                container.style.height = `${viewportHeight}px`;
+            }
+            
+            // Force reset any window scrolling caused by focus
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            
+            // Keep chat scrolled to bottom
+            setTimeout(scrollToBottom, 50);
+        } else {
+            // Restore default styling on desktop
+            const container = document.querySelector('.app-container');
+            if (container) {
+                container.style.height = '';
+            }
+        }
+    };
+
+    window.visualViewport.addEventListener('resize', handleViewportChange);
+    window.visualViewport.addEventListener('scroll', handleViewportChange);
+    
+    // Initial call to set size correctly
+    handleViewportChange();
 }
