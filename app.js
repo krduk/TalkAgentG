@@ -75,11 +75,7 @@ function init() {
         fetchAvailableModels();
     }
     
-    // Add default initial message to history (no voice on startup to avoid browser block)
-    chatHistory.push({
-        role: 'model',
-        text: 'お疲れー、先輩！今日からサポート担当する18歳ギャルオペレーターのルナだよ！システムコマンドでも何でもフランクに入力しちゃってね！'
-    });
+    loadChatHistory();
 }
 
 // Load Settings from LocalStorage
@@ -188,12 +184,13 @@ function setupEventListeners() {
         userInput.style.height = (userInput.scrollHeight) + 'px';
     });
 
+    // Mobile input focus scroll jump fix
     userInput.addEventListener('focus', () => {
-        // Delay scroll correction to ensure keyboard layout calculations are complete
         setTimeout(() => {
             window.scrollTo(0, 0);
             document.body.scrollTop = 0;
-        }, 50);
+            scrollToBottom();
+        }, 120);
     });
 
     // Modals
@@ -223,6 +220,7 @@ function closeModal() {
 function clearChat() {
     if (confirm("チャット履歴（SYS_LOG）を消去しますか？")) {
         chatHistory = [];
+        localStorage.removeItem('cosmos_elena_chat_history_retro');
         chatMessages.innerHTML = `
             <div class="message system-msg">
                 <div class="msg-content">
@@ -317,6 +315,7 @@ function appendUserMessage(text) {
     chatMessages.appendChild(messageDiv);
     scrollToBottom();
     chatHistory.push({ role: 'user', text: text });
+    saveChatHistory();
 }
 
 function appendElenaMessage(text) {
@@ -360,6 +359,7 @@ function appendElenaMessage(text) {
         }
         
         chatHistory.push({ role: 'model', text: text });
+        saveChatHistory();
         if (config.voiceEnabled) {
             speak(text);
         }
@@ -376,6 +376,8 @@ function appendSystemMessage(text) {
     `;
     chatMessages.appendChild(messageDiv);
     scrollToBottom();
+    chatHistory.push({ role: 'system', text: text });
+    saveChatHistory();
 }
 
 // Typing (Typewriter) Effect with Retro Beeps
@@ -851,3 +853,61 @@ function setupVisualViewport() {
 
 // Start app
 document.addEventListener('DOMContentLoaded', init);
+
+// Chat History Save & Load Functions
+function saveChatHistory() {
+    localStorage.setItem('cosmos_elena_chat_history_retro', JSON.stringify(chatHistory));
+}
+
+function loadChatHistory() {
+    const savedHistory = localStorage.getItem('cosmos_elena_chat_history_retro');
+    if (savedHistory) {
+        try {
+            chatHistory = JSON.parse(savedHistory);
+            if (chatHistory.length > 0) {
+                // Clear the default welcome message
+                chatMessages.innerHTML = '';
+                
+                chatHistory.forEach(msg => {
+                    const messageDiv = document.createElement('div');
+                    if (msg.role === 'user') {
+                        messageDiv.className = 'message user-msg';
+                        messageDiv.innerHTML = `
+                            <div class="msg-sender">${escapeHTML(config.userName)}></div>
+                            <div class="msg-bubble">${escapeHTML(msg.text)}</div>
+                        `;
+                    } else if (msg.role === 'model') {
+                        messageDiv.className = 'message character-msg';
+                        messageDiv.innerHTML = `
+                            <div class="msg-sender">[ LUNA ]</div>
+                            <div class="msg-bubble">
+                                <div>${escapeHTML(msg.text)}</div>
+                            </div>
+                        `;
+                    } else if (msg.role === 'system') {
+                        messageDiv.className = 'message system-msg';
+                        messageDiv.innerHTML = `
+                            <div class="msg-content">
+                                *** ${escapeHTML(msg.text)} ***
+                            </div>
+                        `;
+                    }
+                    chatMessages.appendChild(messageDiv);
+                });
+                scrollToBottom();
+            }
+        } catch (e) {
+            console.error('Error loading chat history:', e);
+            initDefaultHistory();
+        }
+    } else {
+        initDefaultHistory();
+    }
+}
+
+function initDefaultHistory() {
+    chatHistory = [{
+        role: 'model',
+        text: 'お疲れー、先輩！今日からサポート担当する18歳ギャルオペレーターのルナだよ！システムコマンドでも何でもフランクに入力しちゃってね！'
+    }];
+}
