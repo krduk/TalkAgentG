@@ -579,7 +579,7 @@ html, body {
     color: #ffffff;
     padding: 8px;
     font-family: var(--font-retro);
-    font-size: 0.95rem;
+    font-size: 1rem; /* Prevent iOS focus zoom */
     outline: none;
 }
 
@@ -610,7 +610,7 @@ select {
     color: #ffffff;
     padding: 8px;
     font-family: var(--font-retro);
-    font-size: 0.95rem;
+    font-size: 1rem; /* Prevent iOS focus zoom */
     outline: none;
 }
 
@@ -620,7 +620,7 @@ textarea {
     color: #ffffff;
     padding: 8px;
     font-family: var(--font-retro);
-    font-size: 0.95rem;
+    font-size: 1rem; /* Prevent iOS focus zoom */
     outline: none;
     resize: vertical;
 }
@@ -810,7 +810,7 @@ input[type="checkbox"]:checked + .switch-slider::after {
         font-size: 0.95rem;
     }
     #userInput {
-        font-size: 0.95rem;
+        font-size: 1rem; /* Prevent iOS focus zoom */
     }
     .send-btn {
         font-size: 0.95rem;
