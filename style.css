@@ -190,7 +190,6 @@ html, body {
 }
 
 .header-btn:hover {
-    color: #ffffff;
     background-color: var(--retro-cyan);
     color: var(--retro-blue);
 }
@@ -638,6 +637,41 @@ textarea {
     accent-color: var(--retro-cyan);
     width: 16px;
     height: 16px;
+}
+
+/* Hidden checkbox for custom switch-slider label pattern */
+.toggle-switch input[type="checkbox"] {
+    display: none;
+}
+
+.switch-slider {
+    display: inline-block;
+    position: relative;
+    width: 40px;
+    height: 20px;
+    background-color: #333333;
+    border: 2px solid var(--retro-cyan);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.switch-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background-color: var(--retro-cyan);
+    transition: transform 0.2s;
+}
+
+input[type="checkbox"]:checked + .switch-slider {
+    background-color: #002200;
+}
+
+input[type="checkbox"]:checked + .switch-slider::after {
+    transform: translateX(20px);
 }
 
 .modal-footer {

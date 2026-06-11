@@ -126,7 +126,7 @@ function updateUIFromSettings() {
     modeSelect.value = config.mode;
     geminiModelSelect.value = config.geminiModel || 'gemini-3.1-flash-lite';
     googleClientIdInput.value = config.googleClientId || '';
-    agentColorSelect.value = config.agentColorMode || 'green';
+    agentColorSelect.value = config.agentColorMode || 'mono';
     soundToggle.checked = config.soundEnabled;
     voiceToggle.checked = config.voiceEnabled;
     systemPromptInput.value = config.systemPrompt;
@@ -674,11 +674,10 @@ async function fetchAvailableModels() {
         
         if (data.models) {
             // Filter models that support generateContent method and are modern (Gemini 3.x, 2.x only)
-            const allowedModels = ['gemini-3.1-flash-lite', 'gemini-3.1-flash', 'gemini-3.1-pro', 'gemini-2.0-flash'];
             const availableModels = data.models
                 .filter(m => m.supportedGenerationMethods.includes('generateContent'))
                 .map(m => m.name.replace('models/', ''))
-                .filter(name => allowedModels.includes(name) || name.startsWith('gemini-3.1') || name.startsWith('gemini-3.0'));
+                .filter(name => name.startsWith('gemini-'));
             
             if (availableModels.length > 0) {
                 updateModelDropdown(availableModels);
@@ -719,9 +718,6 @@ function updateModelDropdown(modelsList) {
         localStorage.setItem('cosmos_elena_config_retro', JSON.stringify(config));
     }
 }
-
-// Start app
-document.addEventListener('DOMContentLoaded', init);
 
 // Google Calendar Sync Functions
 function initGoogleAuth() {
