@@ -368,12 +368,19 @@ function appendElenaMessage(text) {
     
     const textContainer = messageDiv.querySelector('.typewriter-text');
     
-    // Start mouth talking animation
-    startTalkingAnimation();
+    // Start voice speaking instantly if enabled
+    if (config.voiceEnabled) {
+        speak(text);
+    } else {
+        // Fallback to visual-only lip sync if voice is disabled
+        startTalkingAnimation();
+    }
     
     typeWriter(textContainer, text, 0, () => {
-        // Stop mouth talking animation
-        stopTalkingAnimation();
+        // Stop talking animation only if voice is disabled (otherwise onend of speech handles it)
+        if (!config.voiceEnabled) {
+            stopTalkingAnimation();
+        }
         
         updateHUD('STABLE');
         // Remove typewriter cursor from this completed block
@@ -392,9 +399,6 @@ function appendElenaMessage(text) {
         
         chatHistory.push({ role: 'model', text: text });
         saveChatHistory();
-        if (config.voiceEnabled) {
-            speak(text);
-        }
     });
 }
 
@@ -564,6 +568,17 @@ function speak(text) {
         
         utterance.pitch = 1.2; // Slightly higher pitch for anime style
         utterance.rate = 1.05;
+        
+        // Synchronize lip-sync mouth animation with actual speech audio
+        utterance.onstart = () => {
+            startTalkingAnimation();
+        };
+        utterance.onend = () => {
+            stopTalkingAnimation();
+        };
+        utterance.onerror = () => {
+            stopTalkingAnimation();
+        };
         
         window.speechSynthesis.speak(utterance);
     }, 50);
