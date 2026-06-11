@@ -186,7 +186,7 @@ function setupEventListeners() {
 
     // Mobile input focus scroll jump fix
     userInput.addEventListener('focus', () => {
-        if (window.innerWidth <= 900) {
+        if (!window.visualViewport && window.innerWidth <= 900) {
             const container = document.querySelector('.app-container');
             if (container) {
                 // Instantly scale down the viewport height to prevent the OS auto-scrolling
@@ -206,7 +206,7 @@ function setupEventListeners() {
     });
 
     userInput.addEventListener('blur', () => {
-        if (window.innerWidth <= 900) {
+        if (!window.visualViewport && window.innerWidth <= 900) {
             const container = document.querySelector('.app-container');
             if (container) {
                 // Restore height
@@ -845,38 +845,6 @@ function stopTalkingAnimation() {
     }
 }
 
-// Handle visual viewport changes to keep the layout fixed and prevent keyboard scroll push
-function setupVisualViewport() {
-    if (!window.visualViewport) return;
-
-    const updateViewport = () => {
-        const vv = window.visualViewport;
-        const appContainer = document.querySelector('.app-container');
-        if (appContainer) {
-            // Set height to actual visual viewport height
-            appContainer.style.height = `${vv.height}px`;
-        }
-        
-        // Detect if software keyboard is likely visible (viewport height drops significantly)
-        const isKeyboard = (window.innerHeight - vv.height) > 150;
-        
-        if (isKeyboard) {
-            document.body.classList.add('keyboard-open');
-        } else {
-            document.body.classList.remove('keyboard-open');
-        }
-        
-        // Force scroll back to top to counteract browser's auto-scroll when focusing inputs
-        window.scrollTo(0, 0);
-    };
-
-    window.visualViewport.addEventListener('resize', updateViewport);
-    window.visualViewport.addEventListener('scroll', updateViewport);
-    
-    // Run initially
-    updateViewport();
-}
-
 // Start app
 document.addEventListener('DOMContentLoaded', init);
 
@@ -943,12 +911,26 @@ function setupVisualViewport() {
     if (!window.visualViewport) return;
 
     const handleViewportChange = () => {
+        const vv = window.visualViewport;
+        const container = document.querySelector('.app-container');
+        
         // Only apply viewport scaling on mobile devices (width <= 900px)
         if (window.innerWidth <= 900) {
-            const viewportHeight = window.visualViewport.height;
-            const container = document.querySelector('.app-container');
+            const viewportHeight = vv.height;
             if (container) {
                 container.style.height = `${viewportHeight}px`;
+                // Keep the fixed container matched with the visual viewport's offset
+                // This prevents the screen from scrolling and showing a black bar at the top on iOS/Android
+                container.style.top = `${vv.offsetTop}px`;
+                container.style.left = `${vv.offsetLeft}px`;
+            }
+            
+            // Detect if software keyboard is likely visible (viewport height drops significantly)
+            const isKeyboard = (window.innerHeight - vv.height) > 150;
+            if (isKeyboard) {
+                document.body.classList.add('keyboard-open');
+            } else {
+                document.body.classList.remove('keyboard-open');
             }
             
             // Force reset any window scrolling multiple times with delay to counter OS auto-scrolling
@@ -968,10 +950,12 @@ function setupVisualViewport() {
             setTimeout(scrollToBottom, 50);
         } else {
             // Restore default styling on desktop
-            const container = document.querySelector('.app-container');
             if (container) {
                 container.style.height = '';
+                container.style.top = '';
+                container.style.left = '';
             }
+            document.body.classList.remove('keyboard-open');
         }
     };
 
