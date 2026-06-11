@@ -716,3 +716,31 @@ textarea {
         height: 480px;
     }
 }
+
+.hide-mobile {
+    display: inline;
+}
+
+@media (max-width: 600px) {
+    .hide-mobile {
+        display: none;
+    }
+    .app-header {
+        flex-wrap: wrap;
+        gap: 8px 15px;
+        justify-content: space-between;
+    }
+    .logo-area {
+        flex: 1 1 100%;
+        border-bottom: 2px dashed var(--retro-green);
+        padding-bottom: 6px;
+        margin-bottom: 2px;
+    }
+    .system-status {
+        font-size: 0.85rem;
+    }
+    .header-btn {
+        font-size: 0.85rem;
+        padding: 0;
+    }
+}
