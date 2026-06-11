@@ -709,7 +709,7 @@ textarea {
     }
     .portrait-section {
         max-width: 100%;
-        height: 90px;
+        height: 130px;
         flex: 0 0 auto;
         flex-direction: row;
         border: 2px double var(--retro-cyan);
@@ -718,9 +718,9 @@ textarea {
         display: none;
     }
     .portrait-container {
-        width: 86px;
-        height: 86px;
-        flex: 0 0 86px;
+        width: 126px;
+        height: 126px;
+        flex: 0 0 126px;
         border-bottom: none;
         border-right: 4px double var(--retro-cyan);
     }
@@ -729,20 +729,22 @@ textarea {
     }
     .portrait-hud-bottom {
         flex: 1;
-        padding: 8px 12px;
+        padding: 10px 12px;
         justify-content: center;
-        gap: 4px;
+        gap: 6px;
         background: transparent;
+        display: flex;
+        flex-direction: column;
     }
     .hud-box {
-        font-size: 0.8rem;
-        gap: 6px;
+        font-size: 0.85rem;
+        gap: 8px;
     }
     .hud-stat {
-        font-size: 0.8rem;
+        font-size: 0.85rem;
     }
     .stat-bar {
-        width: 50%;
+        width: 55%;
     }
     .chat-section {
         flex: 1;
