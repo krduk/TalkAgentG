@@ -20,14 +20,18 @@
     image-rendering: pixelated; /* Render pixel art sharp */
 }
 
-body {
+html, body {
     background-color: #000005;
     color: var(--text-color);
     font-family: var(--font-retro);
     font-size: 16px;
-    height: 100vh;
+    height: 100%;
+    height: 100dvh;
     overflow: hidden;
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
 }
 
 /* CRT Screen Effect Wrapper */
@@ -102,7 +106,7 @@ body {
     z-index: 5;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100%;
     padding: 15px;
     gap: 15px;
 }
@@ -186,7 +190,6 @@ body {
 }
 
 .header-btn:hover {
-    color: #ffffff;
     background-color: var(--retro-cyan);
     color: var(--retro-blue);
 }
@@ -576,7 +579,7 @@ body {
     color: #ffffff;
     padding: 8px;
     font-family: var(--font-retro);
-    font-size: 0.95rem;
+    font-size: 1rem; /* Prevent iOS focus zoom */
     outline: none;
 }
 
@@ -607,7 +610,7 @@ select {
     color: #ffffff;
     padding: 8px;
     font-family: var(--font-retro);
-    font-size: 0.95rem;
+    font-size: 1rem; /* Prevent iOS focus zoom */
     outline: none;
 }
 
@@ -617,7 +620,7 @@ textarea {
     color: #ffffff;
     padding: 8px;
     font-family: var(--font-retro);
-    font-size: 0.95rem;
+    font-size: 1rem; /* Prevent iOS focus zoom */
     outline: none;
     resize: vertical;
 }
@@ -634,6 +637,41 @@ textarea {
     accent-color: var(--retro-cyan);
     width: 16px;
     height: 16px;
+}
+
+/* Hidden checkbox for custom switch-slider label pattern */
+.toggle-switch input[type="checkbox"] {
+    display: none;
+}
+
+.switch-slider {
+    display: inline-block;
+    position: relative;
+    width: 40px;
+    height: 20px;
+    background-color: #333333;
+    border: 2px solid var(--retro-cyan);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.switch-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background-color: var(--retro-cyan);
+    transition: transform 0.2s;
+}
+
+input[type="checkbox"]:checked + .switch-slider {
+    background-color: #002200;
+}
+
+input[type="checkbox"]:checked + .switch-slider::after {
+    transform: translateX(20px);
 }
 
 .modal-footer {
@@ -699,6 +737,11 @@ textarea {
 /* Responsive adjustment */
 @media (max-width: 900px) {
     .app-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
         padding: 8px;
         gap: 8px;
     }
@@ -767,7 +810,7 @@ textarea {
         font-size: 0.95rem;
     }
     #userInput {
-        font-size: 0.95rem;
+        font-size: 1rem; /* Prevent iOS focus zoom */
     }
     .send-btn {
         font-size: 0.95rem;
@@ -830,4 +873,43 @@ textarea {
         font-size: 0.85rem;
         padding: 0;
     }
+}
+
+/* Grounding Sources (Search Results) styling */
+.grounding-sources {
+    margin-top: 8px;
+    padding: 6px 10px;
+    border: 1px dashed var(--retro-cyan);
+    background-color: rgba(0, 0, 0, 0.5);
+    font-size: 0.85rem;
+}
+
+.sources-title {
+    color: var(--retro-cyan);
+    font-weight: bold;
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+}
+
+.sources-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+}
+
+.sources-list li {
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sources-list a {
+    color: var(--retro-green);
+    text-decoration: none;
+}
+
+.sources-list a:hover {
+    color: #ffffff;
+    text-decoration: underline;
 }

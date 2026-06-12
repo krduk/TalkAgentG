@@ -75,11 +75,7 @@ function init() {
         fetchAvailableModels();
     }
     
-    // Add default initial message to history (no voice on startup to avoid browser block)
-    chatHistory.push({
-        role: 'model',
-        text: 'お疲れー、先輩！今日からサポート担当する18歳ギャルオペレーターのルナだよ！システムコマンドでも何でもフランクに入力しちゃってね！'
-    });
+    loadChatHistory();
 }
 
 // Load Settings from LocalStorage
@@ -130,7 +126,7 @@ function updateUIFromSettings() {
     modeSelect.value = config.mode;
     geminiModelSelect.value = config.geminiModel || 'gemini-3.1-flash-lite';
     googleClientIdInput.value = config.googleClientId || '';
-    agentColorSelect.value = config.agentColorMode || 'green';
+    agentColorSelect.value = config.agentColorMode || 'mono';
     soundToggle.checked = config.soundEnabled;
     voiceToggle.checked = config.voiceEnabled;
     systemPromptInput.value = config.systemPrompt;
@@ -188,8 +184,35 @@ function setupEventListeners() {
         userInput.style.height = (userInput.scrollHeight) + 'px';
     });
 
+    // Mobile input focus scroll jump fix
     userInput.addEventListener('focus', () => {
-        // Delay scroll correction to ensure keyboard layout calculations are complete
+        if (!window.visualViewport && window.innerWidth <= 900) {
+            const container = document.querySelector('.app-container');
+            if (container) {
+                // Instantly scale down the viewport height to prevent the OS auto-scrolling
+                container.style.height = `${window.innerHeight - 300}px`;
+            }
+        }
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            scrollToBottom();
+        }, 30);
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            scrollToBottom();
+        }, 120);
+    });
+
+    userInput.addEventListener('blur', () => {
+        if (!window.visualViewport && window.innerWidth <= 900) {
+            const container = document.querySelector('.app-container');
+            if (container) {
+                // Restore height
+                container.style.height = '100%';
+            }
+        }
         setTimeout(() => {
             window.scrollTo(0, 0);
             document.body.scrollTop = 0;
@@ -223,6 +246,7 @@ function closeModal() {
 function clearChat() {
     if (confirm("チャット履歴（SYS_LOG）を消去しますか？")) {
         chatHistory = [];
+        localStorage.removeItem('cosmos_elena_chat_history_retro');
         chatMessages.innerHTML = `
             <div class="message system-msg">
                 <div class="msg-content">
@@ -285,6 +309,12 @@ function handleFormSubmit(e) {
     // Sync HUD status
     updateHUD('PROCESSING');
     
+    // Unlock SpeechSynthesis for mobile/modern browsers (Autoplay restriction workaround)
+    if (config.voiceEnabled && 'speechSynthesis' in window) {
+        const unlockUtterance = new SpeechSynthesisUtterance('');
+        window.speechSynthesis.speak(unlockUtterance);
+    }
+    
     // Get AI response
     typingIndicator.classList.remove('hidden');
     
@@ -317,9 +347,10 @@ function appendUserMessage(text) {
     chatMessages.appendChild(messageDiv);
     scrollToBottom();
     chatHistory.push({ role: 'user', text: text });
+    saveChatHistory();
 }
 
-function appendElenaMessage(text) {
+function appendElenaMessage(text, groundingMetadata = null) {
     typingIndicator.classList.add('hidden');
     
     const messageDiv = document.createElement('div');
@@ -337,16 +368,53 @@ function appendElenaMessage(text) {
     
     const textContainer = messageDiv.querySelector('.typewriter-text');
     
-    // Start mouth talking animation
-    startTalkingAnimation();
+    // Start voice speaking instantly if enabled
+    if (config.voiceEnabled) {
+        speak(text);
+    } else {
+        // Fallback to visual-only lip sync if voice is disabled
+        startTalkingAnimation();
+    }
     
     typeWriter(textContainer, text, 0, () => {
-        // Stop mouth talking animation
-        stopTalkingAnimation();
+        // Stop talking animation only if voice is disabled (otherwise onend of speech handles it)
+        if (!config.voiceEnabled) {
+            stopTalkingAnimation();
+        }
         
         updateHUD('STABLE');
         // Remove typewriter cursor from this completed block
         textContainer.classList.remove('typewriter-text');
+        
+        // Show sources if available (Google Search Grounding)
+        if (groundingMetadata && groundingMetadata.groundingChunks) {
+            const sourcesDiv = document.createElement('div');
+            sourcesDiv.className = 'grounding-sources';
+            
+            const uniqueSources = [];
+            const seenUris = new Set();
+            
+            groundingMetadata.groundingChunks.forEach(chunk => {
+                if (chunk.web && chunk.web.uri && !seenUris.has(chunk.web.uri)) {
+                    seenUris.add(chunk.web.uri);
+                    uniqueSources.push({
+                        title: chunk.web.title || chunk.web.uri,
+                        uri: chunk.web.uri
+                    });
+                }
+            });
+            
+            if (uniqueSources.length > 0) {
+                let sourcesHtml = '<div class="sources-title"><i class="fa-solid fa-square-rss"></i> SOURCE_LINKS.SYS:</div><ul class="sources-list">';
+                uniqueSources.forEach(src => {
+                    sourcesHtml += `<li><a href="${escapeHTML(src.uri)}" target="_blank" rel="noopener noreferrer">${escapeHTML(src.title)}</a></li>`;
+                });
+                sourcesHtml += '</ul>';
+                sourcesDiv.innerHTML = sourcesHtml;
+                textContainer.parentNode.appendChild(sourcesDiv);
+                scrollToBottom();
+            }
+        }
         
         // Show smiling expression on message completion temporarily
         const portrait = document.getElementById('characterPortrait');
@@ -360,9 +428,7 @@ function appendElenaMessage(text) {
         }
         
         chatHistory.push({ role: 'model', text: text });
-        if (config.voiceEnabled) {
-            speak(text);
-        }
+        saveChatHistory();
     });
 }
 
@@ -376,6 +442,8 @@ function appendSystemMessage(text) {
     `;
     chatMessages.appendChild(messageDiv);
     scrollToBottom();
+    chatHistory.push({ role: 'system', text: text });
+    saveChatHistory();
 }
 
 // Typing (Typewriter) Effect with Retro Beeps
@@ -414,12 +482,14 @@ async function getGeminiResponse(userText) {
     // systemInstruction is a beta feature, so we must use the v1beta endpoint
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
     
+    // Filter out system messages from context window before slicing to ensure API consistency
+    const chatOnlyHistory = chatHistory.filter(msg => msg.role === 'user' || msg.role === 'model');
     // Capping conversation history at last 10 messages for speed & tokens
     const maxContext = 10;
-    const historySlice = chatHistory.slice(-maxContext);
+    const historySlice = chatOnlyHistory.slice(-maxContext);
     
     const contents = historySlice.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
+        role: msg.role,
         parts: [{ text: msg.text }]
     }));
 
@@ -444,6 +514,9 @@ ${calendarEventsText}
 
     const payload = {
         contents: contents,
+        tools: [
+            { googleSearch: {} }
+        ],
         systemInstruction: {
             parts: [{ text: dynamicSystemInstruction }]
         },
@@ -469,9 +542,10 @@ ${calendarEventsText}
 
         const data = await response.json();
         const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
         
         if (responseText) {
-            appendElenaMessage(responseText);
+            appendElenaMessage(responseText, groundingMetadata);
         } else {
             throw new Error("RESPONSE PARSE FAILED.");
         }
@@ -507,18 +581,43 @@ function speak(text) {
     if (!('speechSynthesis' in window)) return;
     
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ja-JP';
     
-    const voices = window.speechSynthesis.getVoices();
-    const jaVoice = voices.find(voice => voice.lang.startsWith('ja') && (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.name.includes('Female')));
-    
-    if (jaVoice) utterance.voice = jaVoice;
-    
-    utterance.pitch = 1.2; // Slightly higher pitch for anime style
-    utterance.rate = 1.05;
-    
-    window.speechSynthesis.speak(utterance);
+    // Clean up markdown syntax and URLs for cleaner speech output
+    let cleanText = text
+        .replace(/[*#_~`>]/g, '') // Remove markdown formatting characters
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert markdown links to plain text
+        .replace(/https?:\/\/\S+/g, 'URL') // Replace raw URLs with "URL"
+        .trim();
+        
+    if (!cleanText) return;
+
+    // A small timeout is needed on some platforms (like iOS Safari) 
+    // after cancel() for the browser to accept new utterances.
+    setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'ja-JP';
+        
+        const voices = window.speechSynthesis.getVoices();
+        const jaVoice = voices.find(voice => voice.lang.startsWith('ja') && (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.name.includes('Female')));
+        
+        if (jaVoice) utterance.voice = jaVoice;
+        
+        utterance.pitch = 1.2; // Slightly higher pitch for anime style
+        utterance.rate = 1.05;
+        
+        // Synchronize lip-sync mouth animation with actual speech audio
+        utterance.onstart = () => {
+            startTalkingAnimation();
+        };
+        utterance.onend = () => {
+            stopTalkingAnimation();
+        };
+        utterance.onerror = () => {
+            stopTalkingAnimation();
+        };
+        
+        window.speechSynthesis.speak(utterance);
+    }, 50);
 }
 
 // Utility: HUD Update
@@ -611,11 +710,10 @@ async function fetchAvailableModels() {
         
         if (data.models) {
             // Filter models that support generateContent method and are modern (Gemini 3.x, 2.x only)
-            const allowedModels = ['gemini-3.1-flash-lite', 'gemini-3.1-flash', 'gemini-3.1-pro', 'gemini-2.0-flash'];
             const availableModels = data.models
                 .filter(m => m.supportedGenerationMethods.includes('generateContent'))
                 .map(m => m.name.replace('models/', ''))
-                .filter(name => allowedModels.includes(name) || name.startsWith('gemini-3.1') || name.startsWith('gemini-3.0'));
+                .filter(name => name.startsWith('gemini-'));
             
             if (availableModels.length > 0) {
                 updateModelDropdown(availableModels);
@@ -656,9 +754,6 @@ function updateModelDropdown(modelsList) {
         localStorage.setItem('cosmos_elena_config_retro', JSON.stringify(config));
     }
 }
-
-// Start app
-document.addEventListener('DOMContentLoaded', init);
 
 // Google Calendar Sync Functions
 function initGoogleAuth() {
@@ -817,37 +912,133 @@ function stopTalkingAnimation() {
     }
 }
 
-// Handle visual viewport changes to keep the layout fixed and prevent keyboard scroll push
+// Start app
+document.addEventListener('DOMContentLoaded', init);
+
+// Chat History Save & Load Functions
+function saveChatHistory() {
+    localStorage.setItem('cosmos_elena_chat_history_retro', JSON.stringify(chatHistory));
+}
+
+function loadChatHistory() {
+    const savedHistory = localStorage.getItem('cosmos_elena_chat_history_retro');
+    if (savedHistory) {
+        try {
+            chatHistory = JSON.parse(savedHistory);
+            if (chatHistory.length > 0) {
+                // Clear the default welcome message
+                chatMessages.innerHTML = '';
+                
+                chatHistory.forEach(msg => {
+                    const messageDiv = document.createElement('div');
+                    if (msg.role === 'user') {
+                        messageDiv.className = 'message user-msg';
+                        messageDiv.innerHTML = `
+                            <div class="msg-sender">${escapeHTML(config.userName)}></div>
+                            <div class="msg-bubble">${escapeHTML(msg.text)}</div>
+                        `;
+                    } else if (msg.role === 'model') {
+                        messageDiv.className = 'message character-msg';
+                        messageDiv.innerHTML = `
+                            <div class="msg-sender">[ LUNA ]</div>
+                            <div class="msg-bubble">
+                                <div>${escapeHTML(msg.text)}</div>
+                            </div>
+                        `;
+                    } else if (msg.role === 'system') {
+                        messageDiv.className = 'message system-msg';
+                        messageDiv.innerHTML = `
+                            <div class="msg-content">
+                                *** ${escapeHTML(msg.text)} ***
+                            </div>
+                        `;
+                    }
+                    chatMessages.appendChild(messageDiv);
+                });
+                scrollToBottom();
+            }
+        } catch (e) {
+            console.error('Error loading chat history:', e);
+            initDefaultHistory();
+        }
+    } else {
+        initDefaultHistory();
+    }
+}
+
+function initDefaultHistory() {
+    chatHistory = [{
+        role: 'model',
+        text: 'お疲れー、先輩！今日からサポート担当する18歳ギャルオペレーターのルナだよ！システムコマンドでも何でもフランクに入力しちゃってね！'
+    }];
+}
+
+// Setup Visual Viewport for Mobile Keyboard Layout Fix
 function setupVisualViewport() {
     if (!window.visualViewport) return;
 
-    const updateViewport = () => {
+    const handleViewportChange = () => {
         const vv = window.visualViewport;
-        const appContainer = document.querySelector('.app-container');
-        if (appContainer) {
-            // Set height to actual visual viewport height
-            appContainer.style.height = `${vv.height}px`;
-        }
+        const container = document.querySelector('.app-container');
         
-        // Detect if software keyboard is likely visible (viewport height drops significantly)
-        const isKeyboard = (window.innerHeight - vv.height) > 150;
-        
-        if (isKeyboard) {
-            document.body.classList.add('keyboard-open');
+        // Only apply viewport scaling on mobile devices (width <= 900px)
+        if (window.innerWidth <= 900) {
+            const viewportHeight = vv.height;
+            if (container) {
+                container.style.height = `${viewportHeight}px`;
+                // Keep the fixed container matched with the visual viewport's offset
+                // This prevents the screen from scrolling and showing a black bar at the top on iOS/Android
+                container.style.top = `${vv.offsetTop}px`;
+                container.style.left = `${vv.offsetLeft}px`;
+            }
+            
+            // Detect if software keyboard is likely visible (viewport height drops significantly)
+            const isKeyboard = (window.innerHeight - vv.height) > 150;
+            if (isKeyboard) {
+                document.body.classList.add('keyboard-open');
+            } else {
+                document.body.classList.remove('keyboard-open');
+            }
+            
+            // Force reset any window scrolling multiple times with delay to counter OS auto-scrolling
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+            }, 30);
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+            }, 100);
+            
+            // Keep chat scrolled to bottom
+            setTimeout(scrollToBottom, 50);
         } else {
+            // Restore default styling on desktop
+            if (container) {
+                container.style.height = '';
+                container.style.top = '';
+                container.style.left = '';
+            }
             document.body.classList.remove('keyboard-open');
         }
-        
-        // Force scroll back to top to counteract browser's auto-scroll when focusing inputs
-        window.scrollTo(0, 0);
     };
 
-    window.visualViewport.addEventListener('resize', updateViewport);
-    window.visualViewport.addEventListener('scroll', updateViewport);
+    window.visualViewport.addEventListener('resize', handleViewportChange);
+    window.visualViewport.addEventListener('scroll', handleViewportChange);
     
-    // Run initially
-    updateViewport();
-}
+    // Prevent document-level scrolling entirely on mobile
+    document.addEventListener('scroll', () => {
+        if (window.innerWidth <= 900) {
+            if (window.scrollY !== 0 || window.scrollX !== 0) {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+            }
+        }
+    });
 
-// Start app
-document.addEventListener('DOMContentLoaded', init);
+    // Initial call to set size correctly
+    handleViewportChange();
+}
