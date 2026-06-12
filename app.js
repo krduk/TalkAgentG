@@ -21,6 +21,7 @@ let config = {
     googleClientId: '',
     soundEnabled: true,
     voiceEnabled: false,
+    googleSearchEnabled: false,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     userName: 'OPERATOR'
 };
@@ -59,6 +60,7 @@ const googleClientIdInput = document.getElementById('googleClientIdInput');
 const googleLinkBtn = document.getElementById('googleLinkBtn');
 const soundToggle = document.getElementById('soundToggle');
 const voiceToggle = document.getElementById('voiceToggle');
+const googleSearchToggle = document.getElementById('googleSearchToggle');
 const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
@@ -100,6 +102,7 @@ function saveSettings() {
     config.agentColorMode = agentColorSelect.value;
     config.soundEnabled = soundToggle.checked;
     config.voiceEnabled = voiceToggle.checked;
+    config.googleSearchEnabled = googleSearchToggle ? googleSearchToggle.checked : false;
     config.systemPrompt = systemPromptInput.value.trim() || DEFAULT_SYSTEM_PROMPT;
     
     localStorage.setItem('cosmos_elena_config_retro', JSON.stringify(config));
@@ -129,6 +132,9 @@ function updateUIFromSettings() {
     agentColorSelect.value = config.agentColorMode || 'mono';
     soundToggle.checked = config.soundEnabled;
     voiceToggle.checked = config.voiceEnabled;
+    if (googleSearchToggle) {
+        googleSearchToggle.checked = !!config.googleSearchEnabled;
+    }
     systemPromptInput.value = config.systemPrompt;
 
     // Update portrait container color mode class and image source
@@ -514,9 +520,6 @@ ${calendarEventsText}
 
     const payload = {
         contents: contents,
-        tools: [
-            { googleSearch: {} }
-        ],
         systemInstruction: {
             parts: [{ text: dynamicSystemInstruction }]
         },
@@ -525,6 +528,12 @@ ${calendarEventsText}
             temperature: 0.7
         }
     };
+
+    if (config.googleSearchEnabled) {
+        payload.tools = [
+            { googleSearch: {} }
+        ];
+    }
 
     try {
         const response = await fetch(url, {
