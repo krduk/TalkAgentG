@@ -84,6 +84,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 function init() {
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.00] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -99,6 +100,7 @@ function init() {
     loadChatHistory();
     initMusicPlayer();
     preloadMusicPortraits();
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.00] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -724,21 +726,10 @@ async function getGeminiResponse() {
                             parts: textParts
                         });
                     } else {
-                        // If no text parts, we must insert dummy text to avoid empty content
-                        sanitizedHistory.push({
-                            role: 'model',
-                            parts: [{ text: "LUNA: (Processing command)" }]
-                        });
-                        // Create a dummy function response to satisfy API requirement
-                        sanitizedHistory.push({
-                            role: 'function',
-                            parts: [{
-                                functionResponse: {
-                                    name: current.parts.find(p => p.functionCall)?.functionCall?.name || "unknown",
-                                    response: { status: "error", message: "Task interrupted or failed." }
-                                }
-                            }]
-                        });
+                        // If no text parts, we discard this dangling model turn entirely.
+                        // Do NOT insert dummy text + function response as it violates API structure
+                        // (function response must follow a model turn with functionCall, not a plain text model).
+                        console.warn("Discarded dangling model turn with function calls and no response.");
                     }
                 }
             } else {
@@ -757,9 +748,25 @@ async function getGeminiResponse() {
     chatHistory = sanitizedHistory;
     saveChatHistory();
 
-    // Capping conversation history at last 10 messages for speed & tokens
-    const maxContext = 10;
-    const historySlice = sanitizedHistory.slice(-maxContext);
+    // Capping conversation history for speed & tokens, ensuring:
+    // 1. The first message in contents is a 'user' message.
+    // 2. We don't split function call and function response pairs.
+    let startIndex = sanitizedHistory.length - 10;
+    if (startIndex < 0) startIndex = 0;
+
+    // Adjust backward to find a 'user' message as start.
+    while (startIndex > 0 && sanitizedHistory[startIndex].role !== 'user') {
+        startIndex--;
+    }
+
+    // If still not 'user', search forward.
+    if (startIndex === 0 && sanitizedHistory.length > 0 && sanitizedHistory[0].role !== 'user') {
+        while (startIndex < sanitizedHistory.length && sanitizedHistory[startIndex].role !== 'user') {
+            startIndex++;
+        }
+    }
+
+    const historySlice = sanitizedHistory.slice(startIndex);
     
     const contents = historySlice.map(msg => {
         let parts = [];
