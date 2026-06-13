@@ -697,6 +697,10 @@ async function getGeminiResponse() {
             sanitizedHistory.push(current);
         }
     }
+    
+    // Persist sanitized history back to prevent local memory corruption
+    chatHistory = sanitizedHistory;
+    saveChatHistory();
 
     // Capping conversation history at last 10 messages for speed & tokens
     const maxContext = 10;
@@ -1178,14 +1182,27 @@ ${musicStatusText}
             return;
         }
 
-        const responseText = candidate?.content?.parts?.[0]?.text;
+        const finishReason = candidate?.finishReason;
+        if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
+            throw new Error(`AIの応答が中断されました（原因: ${finishReason}）。歌詞などの著作権保護フィルター（RECITATION）や安全フィルター（SAFETY）に該当した可能性があります。`);
+        }
+
+        let responseText = "";
+        if (candidate?.content?.parts) {
+            responseText = candidate.content.parts
+                .filter(part => part.text)
+                .map(part => part.text)
+                .join("\n")
+                .trim();
+        }
+        
         const groundingMetadata = candidate?.groundingMetadata;
         
         if (responseText) {
             appendElenaMessage(responseText, groundingMetadata);
             isProcessingAI = false;
         } else {
-            throw new Error("RESPONSE PARSE FAILED.");
+            throw new Error("応答テキストの取得に失敗しました（RESPONSE PARSE FAILED）。");
         }
         
     } catch (error) {
@@ -1193,6 +1210,19 @@ ${musicStatusText}
         typingIndicator.classList.add('hidden');
         updateHUD('ERROR');
         isProcessingAI = false;
+        
+        // Clean up conversation history to prevent future turn errors.
+        // If the history ends with an incomplete tool call ('model' with functionCall or 'function'), remove it.
+        while (chatHistory.length > 0) {
+            const last = chatHistory[chatHistory.length - 1];
+            if (last.role === 'function' || (last.role === 'model' && last.parts?.some(p => p.functionCall))) {
+                console.warn(`Removing incomplete turn role="${last.role}" from history to prevent Gemini API Turn errors.`);
+                chatHistory.pop();
+            } else {
+                break;
+            }
+        }
+        saveChatHistory();
         
         appendElenaMessage(`システムエラーが発生しました。\n詳細: ${error.message}\nAPIキー、または接続状態を確認してください。`);
     }
