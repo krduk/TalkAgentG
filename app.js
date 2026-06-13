@@ -153,8 +153,8 @@ async function transcribeAudioFile(file) {
     const base64Data = await fileToBase64(file);
     const mimeType = file.type || 'audio/mp3';
     
-    // Use gemini-2.0-flash which supports audio input reliably
-    const model = 'gemini-2.0-flash';
+    // Use gemini-3.1-flash-lite for transcription
+    const model = 'gemini-3.1-flash-lite';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
     
     const payload = {
@@ -798,7 +798,7 @@ ${musicStatusText}
                 },
                 {
                     name: "music_transcribe_song",
-                    description: "Transcribe the audio of a specific song in the active playlist. Note: Transcribing large files might take some time and requires a capable multimodal model (Gemini 1.5 Pro/Flash, Gemini 2.0).",
+                    description: "Transcribe the audio of a specific song in the active playlist. Note: Transcribing large files might take some time and requires a capable multimodal model (Gemini 3.1 Flash-Lite).",
                     parameters: {
                         type: "OBJECT",
                         properties: {
