@@ -206,6 +206,61 @@ async function transcribeAudioFile(file) {
     return resultText;
 }
 
+async function analyzeAudioFile(file) {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+    if (file.size > MAX_FILE_SIZE) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+        throw new Error(`音声ファイルが大きすぎます（${sizeMb}MB）。解析可能な最大サイズは10MBです。WAVなどの大容量ファイルは、MP3やM4Aなどの圧縮形式に変換してからロードしてください。`);
+    }
+    const base64Data = await fileToBase64(file);
+    const mimeType = file.type || 'audio/mp3';
+    
+    const model = 'gemini-3.1-flash-lite';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
+    
+    const payload = {
+        contents: [
+            {
+                role: 'user',
+                parts: [
+                    {
+                        inlineData: {
+                            mimeType: mimeType,
+                            data: base64Data
+                        }
+                    },
+                    {
+                        text: "この音声ファイルを注意深く聴いて、曲のテンポ、メロディライン、ボーカルの声質、楽器の構成、曲調（明るい、切ない、激しいなど）について詳しく分析し、日本語で感想や印象を述べてください。歌詞自体の文字起こしを出力する必要はありません。全体の雰囲気に焦点を当てて語ってください。"
+                    }
+                ]
+            }
+        ],
+        generationConfig: {
+            temperature: 0.7
+        }
+    };
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error?.message || `HTTP error status ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!resultText) {
+        throw new Error("曲分析結果の解析に失敗しました。");
+    }
+    return resultText;
+}
+
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -875,6 +930,19 @@ ${musicStatusText}
                             }
                         }
                     }
+                },
+                {
+                    name: "music_analyze_song",
+                    description: "Listen to a specific song in the active playlist and provide impressions, thoughts, and comments on the melody, vocals, beat, and overall mood without transcribing the full lyrics.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            index: {
+                                type: "INTEGER",
+                                description: "The 1-based index of the song to analyze. If omitted, analyzes the currently playing song."
+                            }
+                        }
+                    }
                 }
             ]
         }
@@ -1155,6 +1223,44 @@ ${musicStatusText}
                                         message: `Transcription failed: ${err.message}` 
                                     };
                                     appendSystemMessage(`LUNA: TRANSCRIPTION FAILED: ${err.message}`);
+                                }
+                            }
+                        }
+                    }
+                } else if (name === 'music_analyze_song') {
+                    let idx = args.index;
+                    if (playlist.length === 0) {
+                        result = { status: "error", message: "Playlist is empty. Load some music files first." };
+                    } else {
+                        if (idx === undefined || idx === null) {
+                            idx = currentTrackIndex !== -1 ? currentTrackIndex + 1 : 1;
+                        }
+                        
+                        if (idx < 1 || idx > playlist.length) {
+                            result = { status: "error", message: `Invalid track index ${idx}. Playlist size is ${playlist.length}.` };
+                        } else {
+                            const track = playlist[idx - 1];
+                            const fileObj = track.file;
+                            if (!fileObj) {
+                                result = { status: "error", message: `Audio file data is not available for "${track.name}".` };
+                            } else {
+                                appendSystemMessage(`LUNA: ANALYZING "${track.name}"...`);
+                                try {
+                                    const analysis = await analyzeAudioFile(fileObj);
+                                    result = { 
+                                        status: "success", 
+                                        message: `Successfully analyzed "${track.name}".`, 
+                                        trackName: track.name,
+                                        analysis: analysis 
+                                    };
+                                    appendSystemMessage(`LUNA: ANALYSIS COMPLETED FOR "${track.name}"`);
+                                } catch (err) {
+                                    console.error("Audio analysis failed:", err);
+                                    result = { 
+                                        status: "error", 
+                                        message: `Analysis failed: ${err.message}` 
+                                    };
+                                    appendSystemMessage(`LUNA: ANALYSIS FAILED: ${err.message}`);
                                 }
                             }
                         }
@@ -2414,6 +2520,7 @@ TOTAL_LOADED_FILES_POOL_SIZE: ${allLoadedFiles.length}
 5. あなたが曲を再生した際は、その曲の雰囲気（タイトルやジャンル名などから推測）について楽しそうにコメントしたり、先輩（ユーザー）と一緒に音楽を楽しんでいるような会話をしてください。
 6. あなたは再生リスト（プレイリスト）の作成、管理、並び替え、曲の削除、保存されたリストの読み込みなどの操作を \`music_create_playlist\`, \`music_load_playlist\`, \`music_delete_playlist\`, \`music_get_playlists\`, \`music_remove_track\`, \`music_reorder_playlist\` ツールで実行できます。
 7. ユーザーが再生中の曲や特定の曲の歌詞・文字起こしを希望した場合は、 \`music_transcribe_song\` ツールを実行して音声データの文字起こしを行ってください。文字起こしには数秒から十数秒かかる場合があるため、ユーザーに少々待つように伝えてください。
+8. ユーザーが曲のメロディ、雰囲気、ボーカルの声質、楽器などについての感想や印象を聞きたい場合は、 \`music_analyze_song\` ツールを実行して音声データの曲調分析を行ってください。
 `;
     return statusText;
 }
