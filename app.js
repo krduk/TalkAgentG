@@ -83,8 +83,8 @@ const googleSearchToggle = document.getElementById('googleSearchToggle');
 const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
-function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.00] Initializing...");
+async function init() {
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.01] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -100,7 +100,8 @@ function init() {
     loadChatHistory();
     initMusicPlayer();
     preloadMusicPortraits();
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.00] Ready.");
+    await restorePlayerState();
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.01] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -137,6 +138,152 @@ function saveSavedPlaylists() {
     localStorage.setItem('cosmos_elena_playlists_retro', JSON.stringify(savedPlaylists));
 }
 
+// --- IndexedDB & State Persistence for Music ---
+const DB_NAME = 'cosmos_music_db';
+const STORE_NAME = 'music_files';
+
+function openMusicDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'name' });
+            }
+        };
+        request.onsuccess = (e) => {
+            resolve(e.target.result);
+        };
+        request.onerror = (e) => {
+            reject(e.target.error);
+        };
+    });
+}
+
+async function saveFilesToDB(files) {
+    try {
+        const db = await openMusicDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            let count = 0;
+            const checkDone = () => {
+                count++;
+                if (count === files.length) {
+                    resolve();
+                }
+            };
+            if (files.length === 0) {
+                resolve();
+                return;
+            }
+            files.forEach(fileObj => {
+                const actualFile = fileObj.file || fileObj;
+                if (!actualFile || !(actualFile instanceof File)) {
+                    checkDone();
+                    return;
+                }
+                const request = store.put({ name: actualFile.name, file: actualFile, timestamp: Date.now() });
+                request.onsuccess = checkDone;
+                request.onerror = (e) => {
+                    console.error("Failed to store file in IndexedDB:", actualFile.name, e.target.error);
+                    checkDone();
+                };
+            });
+        });
+    } catch (err) {
+        console.error("IndexedDB save multiple files error:", err);
+    }
+}
+
+async function getAllFilesFromDB() {
+    try {
+        const db = await openMusicDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.getAll();
+            request.onsuccess = (e) => {
+                resolve(e.target.result || []);
+            };
+            request.onerror = (e) => {
+                reject(e.target.error);
+            };
+        });
+    } catch (err) {
+        console.error("IndexedDB get all files error:", err);
+        return [];
+    }
+}
+
+function savePlayerState() {
+    const state = {
+        playlistNames: playlist.map(t => t.name),
+        currentTrackIndex: currentTrackIndex,
+        playMode: playMode
+    };
+    localStorage.setItem('cosmos_player_state', JSON.stringify(state));
+}
+
+async function restorePlayerState() {
+    try {
+        const dbFiles = await getAllFilesFromDB();
+        if (!dbFiles || dbFiles.length === 0) {
+            return;
+        }
+        
+        allLoadedFiles = dbFiles.map(df => ({
+            name: df.name,
+            file: df.file
+        }));
+        
+        const savedState = localStorage.getItem('cosmos_player_state');
+        if (savedState) {
+            const state = JSON.parse(savedState);
+            if (state.playMode) {
+                playMode = state.playMode;
+                const modeBtn = document.getElementById('musicModeBtn');
+                if (modeBtn) {
+                    if (playMode === 'normal') modeBtn.textContent = '[NORM]';
+                    else if (playMode === 'repeat-all') modeBtn.textContent = '[ALL]';
+                    else if (playMode === 'repeat-one') modeBtn.textContent = '[ONE]';
+                    else if (playMode === 'shuffle') modeBtn.textContent = '[SHUF]';
+                }
+            }
+            
+            if (state.playlistNames && state.playlistNames.length > 0) {
+                const restoredPlaylist = [];
+                state.playlistNames.forEach(name => {
+                    const match = allLoadedFiles.find(f => f.name === name);
+                    if (match) {
+                        restoredPlaylist.push(match);
+                    }
+                });
+                
+                if (restoredPlaylist.length > 0) {
+                    playlist = restoredPlaylist;
+                    renderPlaylist();
+                    
+                    if (state.currentTrackIndex !== undefined && state.currentTrackIndex !== null) {
+                        currentTrackIndex = state.currentTrackIndex;
+                        if (currentTrackIndex >= 0 && currentTrackIndex < playlist.length) {
+                            updateNowPlayingUI();
+                            const track = playlist[currentTrackIndex];
+                            if (track.file) {
+                                initMusicAudio();
+                                musicAudio.src = URL.createObjectURL(track.file);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        console.log(`[Restore] Restored ${allLoadedFiles.length} files and player state.`);
+    } catch (err) {
+        console.error("Error restoring player state:", err);
+    }
+}
+
 // Merge new files into the pool of all loaded files
 function mergeToAllLoadedFiles(newFiles) {
     newFiles.forEach(nf => {
@@ -150,9 +297,20 @@ function mergeToAllLoadedFiles(newFiles) {
             }
         }
     });
+    saveFilesToDB(newFiles);
+}
+
+function getMetadataCacheKey(file, type) {
+    return `cosmos_elena_cache_${type}:${file.name}_${file.size}`;
 }
 
 async function transcribeAudioFile(file) {
+    const cacheKey = getMetadataCacheKey(file, 'transcription');
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+        console.log(`[Cache Hit] transcription for ${file.name}`);
+        return cached;
+    }
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
     if (file.size > MAX_FILE_SIZE) {
         const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
@@ -205,10 +363,17 @@ async function transcribeAudioFile(file) {
     if (!resultText) {
         throw new Error("文字起こし結果の解析に失敗しました。");
     }
+    localStorage.setItem(cacheKey, resultText);
     return resultText;
 }
 
 async function analyzeAudioFile(file) {
+    const cacheKey = getMetadataCacheKey(file, 'analysis');
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+        console.log(`[Cache Hit] analysis for ${file.name}`);
+        return cached;
+    }
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
     if (file.size > MAX_FILE_SIZE) {
         const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
@@ -260,6 +425,7 @@ async function analyzeAudioFile(file) {
     if (!resultText) {
         throw new Error("曲分析結果の解析に失敗しました。");
     }
+    localStorage.setItem(cacheKey, resultText);
     return resultText;
 }
 
@@ -1187,6 +1353,7 @@ ${musicStatusText}
                             currentTrackIndex = -1;
                             renderPlaylist();
                             updateNowPlayingUI();
+                            savePlayerState();
                             result = { 
                                 status: "success", 
                                 message: `Reordered playlist to contain ${newPlaylist.length} tracks.`, 
@@ -2154,6 +2321,7 @@ async function selectMusicDirectory() {
         appendSystemMessage(`SOUND_BOARD: LOADED ${playlist.length} TRACKS.`);
         renderPlaylist();
         updateNowPlayingUI();
+        savePlayerState();
         
         if (config.mode === 'api' && config.apiKey) {
             setTimeout(() => {
@@ -2207,6 +2375,7 @@ function handleFileInputChange(e) {
     appendSystemMessage(`SOUND_BOARD: LOADED ${playlist.length} FILES.`);
     renderPlaylist();
     updateNowPlayingUI();
+    savePlayerState();
     startVisualizer();
     
     if (config.mode === 'api' && config.apiKey) {
@@ -2284,6 +2453,8 @@ function playTrack(index) {
         const fileUrl = URL.createObjectURL(track.file);
         musicAudio.src = fileUrl;
         
+        savePlayerState();
+        
         playMusicWithFade()
             .then(() => {
                 updatePlayPauseButton();
@@ -2291,6 +2462,7 @@ function playTrack(index) {
                 renderPlaylist();
                 updateMediaSession(track);
                 scrollActivePlaylistItemIntoView();
+                savePlayerState();
             })
             .catch(err => {
                 console.error("Playback error:", err);
@@ -2378,6 +2550,7 @@ function cyclePlayMode() {
         modeBtn.textContent = '[NORM]';
     }
     appendSystemMessage(`SOUND_BOARD: MODE -> ${playMode.toUpperCase()}`);
+    savePlayerState();
 }
 
 function handleTrackEnded() {
