@@ -84,7 +84,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.02] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.03] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -101,7 +101,7 @@ async function init() {
     initMusicPlayer();
     preloadMusicPortraits();
     await restorePlayerState();
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.02] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.03] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -1283,6 +1283,7 @@ ${musicStatusText}
                             currentTrackIndex = -1;
                             renderPlaylist();
                             updateNowPlayingUI();
+                            savePlayerState();
                             result = { 
                                 status: "success", 
                                 message: `Loaded playlist "${plName}" with ${loaded.length} tracks. (Missing ${missing.length} files from current session)`, 
@@ -1328,6 +1329,7 @@ ${musicStatusText}
                         }
                         renderPlaylist();
                         updateNowPlayingUI();
+                        savePlayerState();
                         result = { status: "success", message: `Removed "${removed.name}" from active playlist.`, newSize: playlist.length };
                         appendSystemMessage(`LUNA: REMOVED TRACK #${idx}`);
                     }
@@ -2303,22 +2305,42 @@ async function selectMusicDirectory() {
         const dirHandle = await window.showDirectoryPicker();
         appendSystemMessage("SOUND_BOARD: SCANNING DIRECTORY...");
         
-        playlist = [];
         const files = await getFilesFromDirectory(dirHandle);
         
         if (files.length === 0) {
             appendSystemMessage("SOUND_BOARD: NO AUDIO FILES FOUND.");
-            renderPlaylist();
-            updateNowPlayingUI();
             return;
         }
         
         files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-        playlist = files;
-        mergeToAllLoadedFiles(files);
-        currentTrackIndex = -1;
         
-        appendSystemMessage(`SOUND_BOARD: LOADED ${playlist.length} TRACKS.`);
+        // Track the currently playing track to restore its index
+        let currentTrackName = null;
+        if (currentTrackIndex !== -1 && currentTrackIndex < playlist.length) {
+            currentTrackName = playlist[currentTrackIndex].name;
+        }
+
+        // Merge new files into playlist
+        files.forEach(nf => {
+            const idx = playlist.findIndex(f => f.name === nf.name);
+            if (idx === -1) {
+                playlist.push(nf);
+            } else {
+                playlist[idx] = nf;
+            }
+        });
+        
+        mergeToAllLoadedFiles(files);
+        
+        // Restore correct index for the current track
+        if (currentTrackName) {
+            const newIdx = playlist.findIndex(f => f.name === currentTrackName);
+            if (newIdx !== -1) {
+                currentTrackIndex = newIdx;
+            }
+        }
+        
+        appendSystemMessage(`SOUND_BOARD: LOADED ${files.length} TRACKS. PLAYLIST HAS ${playlist.length} TRACKS.`);
         renderPlaylist();
         updateNowPlayingUI();
         savePlayerState();
@@ -2365,14 +2387,38 @@ function handleFileInputChange(e) {
     
     selectedFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
     
-    playlist = selectedFiles.map(file => ({
+    const newTracks = selectedFiles.map(file => ({
         name: file.name,
         file: file
     }));
-    mergeToAllLoadedFiles(playlist);
     
-    currentTrackIndex = -1;
-    appendSystemMessage(`SOUND_BOARD: LOADED ${playlist.length} FILES.`);
+    // Track the currently playing track to restore its index
+    let currentTrackName = null;
+    if (currentTrackIndex !== -1 && currentTrackIndex < playlist.length) {
+        currentTrackName = playlist[currentTrackIndex].name;
+    }
+    
+    // Merge new files into playlist
+    newTracks.forEach(nf => {
+        const idx = playlist.findIndex(f => f.name === nf.name);
+        if (idx === -1) {
+            playlist.push(nf);
+        } else {
+            playlist[idx] = nf;
+        }
+    });
+    
+    mergeToAllLoadedFiles(newTracks);
+    
+    // Restore correct index for the current track
+    if (currentTrackName) {
+        const newIdx = playlist.findIndex(f => f.name === currentTrackName);
+        if (newIdx !== -1) {
+            currentTrackIndex = newIdx;
+        }
+    }
+    
+    appendSystemMessage(`SOUND_BOARD: LOADED ${newTracks.length} FILES. PLAYLIST HAS ${playlist.length} TRACKS.`);
     renderPlaylist();
     updateNowPlayingUI();
     savePlayerState();
@@ -2380,7 +2426,7 @@ function handleFileInputChange(e) {
     
     if (config.mode === 'api' && config.apiKey) {
         setTimeout(() => {
-            appendElenaMessage(`おっ、ファイル選んでくれたじゃん！${playlist.length}曲ロードしたよ！どの曲聞く？ルナが流してあげるよ！`);
+            appendElenaMessage(`おっ、ファイル選んでくれたじゃん！${newTracks.length}曲ロードしたよ！プレイリスト全体で${playlist.length}曲になったから、どの曲聞く？ルナが流してあげるよ！`);
         }, 1000);
     }
 }
