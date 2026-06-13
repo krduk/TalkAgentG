@@ -1757,16 +1757,16 @@ function cyclePlayMode() {
     
     if (playMode === 'normal') {
         playMode = 'repeat-all';
-        modeBtn.textContent = '[PLAY: LOOP ALL]';
+        modeBtn.textContent = '[ALL]';
     } else if (playMode === 'repeat-all') {
         playMode = 'repeat-one';
-        modeBtn.textContent = '[PLAY: LOOP ONE]';
+        modeBtn.textContent = '[ONE]';
     } else if (playMode === 'repeat-one') {
         playMode = 'shuffle';
-        modeBtn.textContent = '[PLAY: SHUFFLE]';
+        modeBtn.textContent = '[SHUF]';
     } else {
         playMode = 'normal';
-        modeBtn.textContent = '[PLAY: NORMAL]';
+        modeBtn.textContent = '[NORM]';
     }
     appendSystemMessage(`SOUND_BOARD: MODE -> ${playMode.toUpperCase()}`);
 }
