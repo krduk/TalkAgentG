@@ -1942,11 +1942,9 @@ function updatePortraitUI() {
     let suffix = '';
     let ext = 'png';
     if (isPlaying) {
-        // 音楽再生中は、ヘッドホン画像が存在する状態 ('low' または 'talk') のみに制限し、
-        // 考え中 (thinking) や笑顔 (smile) のときは静止状態 ('low') にフォールバックする
-        if (state !== 'talk') {
-            state = 'low';
-        }
+        // 音楽再生中は、画像の高速切り替えによるガタつき・チラつきを防ぐため、
+        // ヘッドホンを抑えて目を開けた静止状態 ('low_headphones') のみを表示し、画像を固定します。
+        state = 'low';
         suffix = '_headphones';
         ext = 'jpg';
     }

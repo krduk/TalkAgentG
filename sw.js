@@ -1,4 +1,4 @@
-const CACHE_NAME = 'luna-v7';
+const CACHE_NAME = 'luna-v8';
 const ASSETS = [
   './',
   './index.html',
