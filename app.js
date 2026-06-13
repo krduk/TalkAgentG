@@ -48,6 +48,7 @@ let visualizerCtx = null;
 let visualizerAnimationId = null;
 let currentPortraitState = 'low'; // 'low', 'talk', 'smile', 'thinking', 'error'
 let isPuttingHeadphones = false;
+let isRemovingHeadphones = false;
 
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
@@ -1447,10 +1448,19 @@ function triggerPuttingHeadphonesAnimation() {
     }, 800);
 }
 
+function triggerRemovingHeadphonesAnimation() {
+    isRemovingHeadphones = true;
+    updatePortraitUI();
+    setTimeout(() => {
+        isRemovingHeadphones = false;
+        updatePortraitUI();
+    }, 800);
+}
+
 function fadeAndPauseMusic() {
     if (!musicAudio) return;
     isPlaying = false;
-    updatePortraitUI();
+    triggerRemovingHeadphonesAnimation();
     
     if (musicGainNode && audioCtx) {
         const fadeTime = 0.15; // 150ms
@@ -1812,9 +1822,9 @@ function handleTrackEnded() {
             playTrack(0);
         } else {
             isPlaying = false;
+            triggerRemovingHeadphonesAnimation();
             updatePlayPauseButton();
             appendSystemMessage("SOUND_BOARD: PLAYBACK COMPLETED.");
-            updatePortraitUI();
         }
     } else {
         playTrack(nextIndex);
@@ -1938,17 +1948,23 @@ function updatePortraitUI() {
         return;
     }
     
-    if (isPuttingHeadphones) {
+    if (isPuttingHeadphones || isRemovingHeadphones) {
         portrait.src = 'assets/elena_mono_put_headphones.jpg';
         return;
     }
     
+    let state = currentPortraitState;
     let suffix = '';
     let ext = 'png';
-    if (isPlaying && (currentPortraitState === 'low' || currentPortraitState === 'talk')) {
+    if (isPlaying) {
+        // 音楽再生中は、ヘッドホン画像が存在する状態 ('low' または 'talk') のみに制限し、
+        // 考え中 (thinking) や笑顔 (smile) のときは静止状態 ('low') にフォールバックする
+        if (state !== 'talk') {
+            state = 'low';
+        }
         suffix = '_headphones';
         ext = 'jpg';
     }
     
-    portrait.src = `assets/elena_mono_${currentPortraitState}${suffix}.${ext}`;
+    portrait.src = `assets/elena_mono_${state}${suffix}.${ext}`;
 }
