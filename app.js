@@ -1440,21 +1440,11 @@ function connectMusicToAudioContext() {
 }
 
 function triggerPuttingHeadphonesAnimation() {
-    isPuttingHeadphones = true;
     updatePortraitUI();
-    setTimeout(() => {
-        isPuttingHeadphones = false;
-        updatePortraitUI();
-    }, 800);
 }
 
 function triggerRemovingHeadphonesAnimation() {
-    isRemovingHeadphones = true;
     updatePortraitUI();
-    setTimeout(() => {
-        isRemovingHeadphones = false;
-        updatePortraitUI();
-    }, 800);
 }
 
 function fadeAndPauseMusic() {
@@ -1945,11 +1935,6 @@ function updatePortraitUI() {
     const selectedColorMode = config.agentColorMode || 'mono';
     if (selectedColorMode === 'default') {
         portrait.src = 'assets/elena_pixel.png';
-        return;
-    }
-    
-    if (isPuttingHeadphones || isRemovingHeadphones) {
-        portrait.src = 'assets/elena_mono_put_headphones.jpg';
         return;
     }
     
