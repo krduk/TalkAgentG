@@ -94,6 +94,19 @@ function init() {
     
     loadChatHistory();
     initMusicPlayer();
+    preloadMusicPortraits();
+}
+
+function preloadMusicPortraits() {
+    const imagesToPreload = [
+        'assets/elena_mono_put_headphones.jpg',
+        'assets/elena_mono_low_headphones.jpg',
+        'assets/elena_mono_talk_headphones.jpg'
+    ];
+    imagesToPreload.forEach(src => {
+        const img = new Image();
+        img.src = src;
+    });
 }
 
 // Load Settings from LocalStorage
