@@ -103,7 +103,8 @@ function preloadMusicPortraits() {
     const imagesToPreload = [
         'assets/elena_mono_put_headphones.jpg' + v,
         'assets/elena_mono_low_headphones.jpg' + v,
-        'assets/elena_mono_talk_headphones.jpg' + v
+        'assets/elena_mono_talk_headphones.jpg' + v,
+        'assets/elena_mono_low_open_eyes_headphones.jpg' + v
     ];
     imagesToPreload.forEach(src => {
         const img = new Image();
@@ -1961,9 +1962,14 @@ function updatePortraitUI() {
     let suffix = '';
     let ext = 'png';
     if (isPlaying) {
-        // 音楽再生中は、ヘッドホン画像が存在する状態 ('low' または 'talk') のみに制限し、
-        // 考え中 (thinking) や笑顔 (smile) のときは静止状態 ('low') にフォールバックする
-        if (state !== 'talk') {
+        if (talkInterval) {
+            // 話している最中（口パク中）は、目がパチパチ閉じてしまわないように開いた状態を維持する。
+            // 口が開いている時は 'talk' (talk_headphones.jpg)、閉じている時は 'low_open_eyes' (low_open_eyes_headphones.jpg)
+            if (state !== 'talk') {
+                state = 'low_open_eyes';
+            }
+        } else {
+            // 黙って音楽を聴いているときは、目を瞑った状態 ('low' = low_headphones.jpg) にフォールバックする
             state = 'low';
         }
         suffix = '_headphones';
