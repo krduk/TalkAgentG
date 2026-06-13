@@ -1,4 +1,4 @@
-const CACHE_NAME = 'luna-v9';
+const CACHE_NAME = 'luna-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -40,7 +40,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   e.respondWith(
     fetch(e.request).catch(() => {
-      return caches.match(e.request);
+      return caches.match(e.request, { ignoreSearch: true });
     })
   );
 });

@@ -99,10 +99,11 @@ function init() {
 }
 
 function preloadMusicPortraits() {
+    const v = '?v=9';
     const imagesToPreload = [
-        'assets/elena_mono_put_headphones.jpg',
-        'assets/elena_mono_low_headphones.jpg',
-        'assets/elena_mono_talk_headphones.jpg'
+        'assets/elena_mono_put_headphones.jpg' + v,
+        'assets/elena_mono_low_headphones.jpg' + v,
+        'assets/elena_mono_talk_headphones.jpg' + v
     ];
     imagesToPreload.forEach(src => {
         const img = new Image();
@@ -1948,8 +1949,11 @@ function updatePortraitUI() {
         return;
     }
     
+    // Cache buster to force browsers to reload newly overwritten images instantly
+    const v = '?v=9';
+    
     if (isPuttingHeadphones || isRemovingHeadphones) {
-        portrait.src = 'assets/elena_mono_put_headphones.jpg';
+        portrait.src = 'assets/elena_mono_put_headphones.jpg' + v;
         return;
     }
     
@@ -1966,5 +1970,5 @@ function updatePortraitUI() {
         ext = 'jpg';
     }
     
-    portrait.src = `assets/elena_mono_${state}${suffix}.${ext}`;
+    portrait.src = `assets/elena_mono_${state}${suffix}.${ext}${v}`;
 }
