@@ -35,6 +35,7 @@ let talkInterval = null;
 let isMouthOpen = false;
 let allLoadedFiles = [];
 let savedPlaylists = {};
+let isProcessingAI = false;
 
 // Sound Board (Music Player) State
 let playlist = [];
@@ -150,6 +151,11 @@ function mergeToAllLoadedFiles(newFiles) {
 }
 
 async function transcribeAudioFile(file) {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+    if (file.size > MAX_FILE_SIZE) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+        throw new Error(`音声ファイルが大きすぎます（${sizeMb}MB）。メモリ不足を避けるため、10MBを超えるファイルは文字起こしできません。mp3やm4aなどの圧縮された形式のファイルを使用してください。`);
+    }
     const base64Data = await fileToBase64(file);
     const mimeType = file.type || 'audio/mp3';
     
@@ -433,6 +439,7 @@ function playRetroBeep() {
 // Chat Flow
 function handleFormSubmit(e) {
     e.preventDefault();
+    if (isProcessingAI) return;
     const text = userInput.value.trim();
     if (!text) return;
     
@@ -630,14 +637,70 @@ function typeWriter(element, text, index, callback) {
 
 // Get Response from Gemini API
 async function getGeminiResponse() {
+    isProcessingAI = true;
     const model = config.geminiModel || 'gemini-3.1-flash-lite';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
     
     // Filter out system messages from context window before slicing to ensure API consistency
     const chatOnlyHistory = chatHistory.filter(msg => msg.role === 'user' || msg.role === 'model' || msg.role === 'function');
+    
+    // Sanitize to prevent Gemini Turn Structure Errors:
+    // A 'model' turn with functionCalls MUST be followed by a 'function' turn.
+    // If not, we strip the functionCalls from that model turn to prevent API crashes, 
+    // or discard the dangling function response turn.
+    const sanitizedHistory = [];
+    for (let i = 0; i < chatOnlyHistory.length; i++) {
+        const current = chatOnlyHistory[i];
+        if (current.role === 'model') {
+            const hasFunctionCalls = current.parts?.some(p => p.functionCall);
+            if (hasFunctionCalls) {
+                const next = chatOnlyHistory[i + 1];
+                if (next && next.role === 'function') {
+                    sanitizedHistory.push(current);
+                    sanitizedHistory.push(next);
+                    i++; // Skip the next element (function response) since we handled it
+                } else {
+                    // Dangling function call with no response! 
+                    // To prevent API error, we strip the functionCall parts and only keep text parts (if any)
+                    const textParts = current.parts?.filter(p => p.text) || [];
+                    if (textParts.length > 0) {
+                        sanitizedHistory.push({
+                            role: 'model',
+                            parts: textParts
+                        });
+                    } else {
+                        // If no text parts, we must insert dummy text to avoid empty content
+                        sanitizedHistory.push({
+                            role: 'model',
+                            parts: [{ text: "LUNA: (Processing command)" }]
+                        });
+                        // Create a dummy function response to satisfy API requirement
+                        sanitizedHistory.push({
+                            role: 'function',
+                            parts: [{
+                                functionResponse: {
+                                    name: current.parts.find(p => p.functionCall)?.functionCall?.name || "unknown",
+                                    response: { status: "error", message: "Task interrupted or failed." }
+                                }
+                            }]
+                        });
+                    }
+                }
+            } else {
+                sanitizedHistory.push(current);
+            }
+        } else if (current.role === 'function') {
+            // Dangling function response with no preceding call - skip to prevent error
+            console.warn("Discarded dangling function response in history");
+        } else {
+            // 'user' turn
+            sanitizedHistory.push(current);
+        }
+    }
+
     // Capping conversation history at last 10 messages for speed & tokens
     const maxContext = 10;
-    const historySlice = chatOnlyHistory.slice(-maxContext);
+    const historySlice = sanitizedHistory.slice(-maxContext);
     
     const contents = historySlice.map(msg => {
         let parts = [];
@@ -1120,6 +1183,7 @@ ${musicStatusText}
         
         if (responseText) {
             appendElenaMessage(responseText, groundingMetadata);
+            isProcessingAI = false;
         } else {
             throw new Error("RESPONSE PARSE FAILED.");
         }
@@ -1128,6 +1192,7 @@ ${musicStatusText}
         console.error("Gemini API Error:", error);
         typingIndicator.classList.add('hidden');
         updateHUD('ERROR');
+        isProcessingAI = false;
         
         appendElenaMessage(`システムエラーが発生しました。\n詳細: ${error.message}\nAPIキー、または接続状態を確認してください。`);
     }
