@@ -33,6 +33,8 @@ let gapiToken = null;
 let calendarEventsText = "Googleカレンダーは同期されていません。設定のLINK_ACCボタンから認証を行ってください。";
 let talkInterval = null;
 let isMouthOpen = false;
+let allLoadedFiles = [];
+let savedPlaylists = {};
 
 // Sound Board (Music Player) State
 let playlist = [];
@@ -112,6 +114,105 @@ function preloadMusicPortraits() {
     });
 }
 
+// Load Saved Playlists from LocalStorage
+function loadSavedPlaylists() {
+    const saved = localStorage.getItem('cosmos_elena_playlists_retro');
+    if (saved) {
+        try {
+            savedPlaylists = JSON.parse(saved);
+        } catch (e) {
+            console.error('Error parsing saved playlists:', e);
+            savedPlaylists = {};
+        }
+    } else {
+        savedPlaylists = {};
+    }
+}
+
+// Save Saved Playlists to LocalStorage
+function saveSavedPlaylists() {
+    localStorage.setItem('cosmos_elena_playlists_retro', JSON.stringify(savedPlaylists));
+}
+
+// Merge new files into the pool of all loaded files
+function mergeToAllLoadedFiles(newFiles) {
+    newFiles.forEach(nf => {
+        if (!allLoadedFiles.some(f => f.name === nf.name)) {
+            allLoadedFiles.push(nf);
+        } else {
+            // Update existing file reference
+            const idx = allLoadedFiles.findIndex(f => f.name === nf.name);
+            if (idx !== -1) {
+                allLoadedFiles[idx] = nf;
+            }
+        }
+    });
+}
+
+async function transcribeAudioFile(file) {
+    const base64Data = await fileToBase64(file);
+    const mimeType = file.type || 'audio/mp3';
+    
+    // Use gemini-2.0-flash which supports audio input reliably
+    const model = 'gemini-2.0-flash';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
+    
+    const payload = {
+        contents: [
+            {
+                role: 'user',
+                parts: [
+                    {
+                        inlineData: {
+                            mimeType: mimeType,
+                            data: base64Data
+                        }
+                    },
+                    {
+                        text: "この音声ファイルを文字起こししてください。曲の歌詞や、録音されている会話を聞き取って、日本語テキストとして丁寧に書き出してください。BGMのみで声が入っていない場合は「音声が検出されませんでした（インストゥルメンタル曲等）」と答えてください。"
+                    }
+                ]
+            }
+        ],
+        generationConfig: {
+            temperature: 0.4
+        }
+    };
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error?.message || `HTTP error status ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!resultText) {
+        throw new Error("文字起こし結果の解析に失敗しました。");
+    }
+    return resultText;
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = reader.result;
+            const base64 = result.split(',')[1];
+            resolve(base64);
+        };
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+}
+
 // Load Settings from LocalStorage
 function loadSettings() {
     const savedConfig = localStorage.getItem('cosmos_elena_config_retro');
@@ -122,6 +223,7 @@ function loadSettings() {
             console.error('Error parsing config:', e);
         }
     }
+    loadSavedPlaylists();
 }
 
 // Save Settings to LocalStorage
@@ -609,6 +711,103 @@ ${musicStatusText}
                 {
                     name: "music_request_file_select",
                     description: "Ask the user to select local music files by showing a file picker button in the chat."
+                },
+                {
+                    name: "music_create_playlist",
+                    description: "Create and save a new custom playlist with a name and a list of song indices from the current loaded tracks.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            name: {
+                                type: "STRING",
+                                description: "The name of the new playlist (e.g., 'Work BGM')."
+                            },
+                            indices: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "INTEGER"
+                                },
+                                description: "The 1-based indices of the songs from the current playlist to include. If empty or omitted, saves the entire current playlist."
+                            }
+                        },
+                        required: ["name"]
+                    }
+                },
+                {
+                    name: "music_load_playlist",
+                    description: "Load a saved custom playlist by its name.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            name: {
+                                type: "STRING",
+                                description: "The name of the playlist to load."
+                            }
+                        },
+                        required: ["name"]
+                    }
+                },
+                {
+                    name: "music_delete_playlist",
+                    description: "Delete a saved custom playlist.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            name: {
+                                type: "STRING",
+                                description: "The name of the playlist to delete."
+                            }
+                        },
+                        required: ["name"]
+                    }
+                },
+                {
+                    name: "music_get_playlists",
+                    description: "Get the list of all saved custom playlists."
+                },
+                {
+                    name: "music_remove_track",
+                    description: "Remove a song from the active playlist by its 1-based index.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            index: {
+                                type: "INTEGER",
+                                description: "The 1-based index of the track to remove from the current playlist."
+                            }
+                        },
+                        required: ["index"]
+                    }
+                },
+                {
+                    name: "music_reorder_playlist",
+                    description: "Reorder the active playlist using a sequence of 1-based track indices.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            indices: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "INTEGER"
+                                },
+                                description: "The sequence of 1-based indices representing the new order of songs (e.g., [3, 1, 2])."
+                            }
+                        },
+                        required: ["indices"]
+                    }
+                },
+                {
+                    name: "music_transcribe_song",
+                    description: "Transcribe the audio of a specific song in the active playlist. Note: Transcribing large files might take some time and requires a capable multimodal model (Gemini 1.5 Pro/Flash, Gemini 2.0).",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            index: {
+                                type: "INTEGER",
+                                description: "The 1-based index of the song to transcribe. If omitted, transcribes the currently playing song."
+                            }
+                        }
+                    }
                 }
             ]
         }
@@ -718,6 +917,181 @@ ${musicStatusText}
                         console.warn("Direct file click blocked, falling back to chat button:", e);
                     }
                     appendSystemMessage("LUNA: REQUESTED FILE SELECTION");
+                } else if (name === 'music_create_playlist') {
+                    const plName = args.name;
+                    const indices = args.indices || [];
+                    if (playlist.length === 0) {
+                        result = { status: "error", message: "Current playlist is empty. Cannot create a playlist." };
+                    } else {
+                        let tracksToSave = [];
+                        if (indices.length > 0) {
+                            for (const idx of indices) {
+                                if (idx >= 1 && idx <= playlist.length) {
+                                    tracksToSave.push(playlist[idx - 1].name);
+                                }
+                            }
+                        } else {
+                            tracksToSave = playlist.map(t => t.name);
+                        }
+                        
+                        if (tracksToSave.length === 0) {
+                            result = { status: "error", message: "No valid indices specified." };
+                        } else {
+                            savedPlaylists[plName] = tracksToSave;
+                            saveSavedPlaylists();
+                            result = { 
+                                status: "success", 
+                                message: `Playlist "${plName}" created with ${tracksToSave.length} songs.`, 
+                                playlist: tracksToSave 
+                            };
+                            appendSystemMessage(`LUNA: CREATED PLAYLIST "${plName}"`);
+                        }
+                    }
+                } else if (name === 'music_load_playlist') {
+                    const plName = args.name;
+                    const songNames = savedPlaylists[plName];
+                    if (!songNames) {
+                        result = { status: "error", message: `Playlist "${plName}" does not exist.` };
+                    } else {
+                        // Find matching files in allLoadedFiles
+                        const loaded = [];
+                        const missing = [];
+                        for (const name of songNames) {
+                            const found = allLoadedFiles.find(f => f.name === name);
+                            if (found) {
+                                loaded.push(found);
+                            } else {
+                                missing.push(name);
+                            }
+                        }
+                        
+                        if (loaded.length === 0) {
+                            result = { 
+                                status: "error", 
+                                message: `Could not load "${plName}". None of the ${songNames.length} files are currently loaded in allLoadedFiles. Operator needs to load them first.` 
+                            };
+                        } else {
+                            playlist = loaded;
+                            currentTrackIndex = -1;
+                            renderPlaylist();
+                            updateNowPlayingUI();
+                            result = { 
+                                status: "success", 
+                                message: `Loaded playlist "${plName}" with ${loaded.length} tracks. (Missing ${missing.length} files from current session)`, 
+                                loadedCount: loaded.length, 
+                                missingCount: missing.length,
+                                missingFiles: missing
+                            };
+                            appendSystemMessage(`LUNA: LOADED PLAYLIST "${plName}"`);
+                        }
+                    }
+                } else if (name === 'music_delete_playlist') {
+                    const plName = args.name;
+                    if (!savedPlaylists[plName]) {
+                        result = { status: "error", message: `Playlist "${plName}" does not exist.` };
+                    } else {
+                        delete savedPlaylists[plName];
+                        saveSavedPlaylists();
+                        result = { status: "success", message: `Playlist "${plName}" deleted.` };
+                        appendSystemMessage(`LUNA: DELETED PLAYLIST "${plName}"`);
+                    }
+                } else if (name === 'music_get_playlists') {
+                    const list = Object.keys(savedPlaylists).map(name => ({
+                        name: name,
+                        songsCount: savedPlaylists[name].length
+                    }));
+                    result = { status: "success", playlists: list };
+                } else if (name === 'music_remove_track') {
+                    const idx = args.index;
+                    if (playlist.length === 0) {
+                        result = { status: "error", message: "Playlist is already empty." };
+                    } else if (idx < 1 || idx > playlist.length) {
+                        result = { status: "error", message: `Invalid index. Playlist size is ${playlist.length}.` };
+                    } else {
+                        const removed = playlist.splice(idx - 1, 1)[0];
+                        if (currentTrackIndex >= playlist.length) {
+                            currentTrackIndex = playlist.length - 1;
+                        } else if (currentTrackIndex === idx - 1) {
+                            if (isPlaying) {
+                                playTrack(currentTrackIndex !== -1 ? currentTrackIndex : 0);
+                            }
+                        } else if (currentTrackIndex > idx - 1) {
+                            currentTrackIndex--;
+                        }
+                        renderPlaylist();
+                        updateNowPlayingUI();
+                        result = { status: "success", message: `Removed "${removed.name}" from active playlist.`, newSize: playlist.length };
+                        appendSystemMessage(`LUNA: REMOVED TRACK #${idx}`);
+                    }
+                } else if (name === 'music_reorder_playlist') {
+                    const indices = args.indices;
+                    if (playlist.length === 0) {
+                        result = { status: "error", message: "Playlist is empty." };
+                    } else {
+                        const newPlaylist = [];
+                        const invalid = [];
+                        for (const idx of indices) {
+                            if (idx >= 1 && idx <= playlist.length) {
+                                newPlaylist.push(playlist[idx - 1]);
+                            } else {
+                                invalid.push(idx);
+                            }
+                        }
+                        
+                        if (newPlaylist.length === 0) {
+                            result = { status: "error", message: "No valid indices provided for reordering.", invalidIndices: invalid };
+                        } else {
+                            playlist = newPlaylist;
+                            currentTrackIndex = -1;
+                            renderPlaylist();
+                            updateNowPlayingUI();
+                            result = { 
+                                status: "success", 
+                                message: `Reordered playlist to contain ${newPlaylist.length} tracks.`, 
+                                invalidCount: invalid.length, 
+                                invalidIndices: invalid 
+                            };
+                            appendSystemMessage("LUNA: REORDERED PLAYLIST");
+                        }
+                    }
+                } else if (name === 'music_transcribe_song') {
+                    let idx = args.index;
+                    if (playlist.length === 0) {
+                        result = { status: "error", message: "Playlist is empty. Load some music files first." };
+                    } else {
+                        if (idx === undefined || idx === null) {
+                            idx = currentTrackIndex !== -1 ? currentTrackIndex + 1 : 1;
+                        }
+                        
+                        if (idx < 1 || idx > playlist.length) {
+                            result = { status: "error", message: `Invalid track index ${idx}. Playlist size is ${playlist.length}.` };
+                        } else {
+                            const track = playlist[idx - 1];
+                            const fileObj = track.file;
+                            if (!fileObj) {
+                                result = { status: "error", message: `Audio file data is not available for "${track.name}".` };
+                            } else {
+                                appendSystemMessage(`LUNA: TRANSCRIBING "${track.name}"...`);
+                                try {
+                                    const transcription = await transcribeAudioFile(fileObj);
+                                    result = { 
+                                        status: "success", 
+                                        message: `Successfully transcribed "${track.name}".`, 
+                                        trackName: track.name,
+                                        transcription: transcription 
+                                    };
+                                    appendSystemMessage(`LUNA: TRANSCRIPTION COMPLETED FOR "${track.name}"`);
+                                } catch (err) {
+                                    console.error("Transcription failed:", err);
+                                    result = { 
+                                        status: "error", 
+                                        message: `Transcription failed: ${err.message}` 
+                                    };
+                                    appendSystemMessage(`LUNA: TRANSCRIPTION FAILED: ${err.message}`);
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 toolResponseParts.push({
@@ -1566,6 +1940,7 @@ async function selectMusicDirectory() {
         
         files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
         playlist = files;
+        mergeToAllLoadedFiles(files);
         currentTrackIndex = -1;
         
         appendSystemMessage(`SOUND_BOARD: LOADED ${playlist.length} TRACKS.`);
@@ -1618,6 +1993,7 @@ function handleFileInputChange(e) {
         name: file.name,
         file: file
     }));
+    mergeToAllLoadedFiles(playlist);
     
     currentTrackIndex = -1;
     appendSystemMessage(`SOUND_BOARD: LOADED ${playlist.length} FILES.`);
@@ -1897,6 +2273,7 @@ function getMusicStatusTextForGemini() {
     let statusText = `[SOUND_BOARD_STATUS]
 PLAYBACK_STATE: ${isPlaying ? 'PLAYING' : (playlist.length > 0 ? 'PAUSED' : 'STOPPED')}
 PLAY_MODE: ${playMode.toUpperCase()}
+TOTAL_LOADED_FILES_POOL_SIZE: ${allLoadedFiles.length}
 `;
 
     if (playlist.length > 0 && currentTrackIndex !== -1) {
@@ -1921,14 +2298,27 @@ PLAY_MODE: ${playMode.toUpperCase()}
     } else {
         statusText += "PLAYLIST_TRACKS_LIST: (No tracks loaded. Tell the operator to use LOAD_DIR or SELECT_FILES buttons to select a folder or files from their PC.)\n";
     }
+
+    const savedNames = Object.keys(savedPlaylists);
+    statusText += `SAVED_PLAYLISTS_COUNT: ${savedNames.length}\n`;
+    if (savedNames.length > 0) {
+        statusText += "SAVED_PLAYLISTS_LIST:\n";
+        savedNames.forEach(name => {
+            statusText += `- "${name}" (${savedPlaylists[name].length} tracks)\n`;
+        });
+    } else {
+        statusText += "SAVED_PLAYLISTS_LIST: (No saved playlists yet)\n";
+    }
     
     statusText += `
 [MUSIC_PLAYER_GUIDELINES]
 1. あなた（ルナ）は「SOUND_BOARD.SYS」のコントロール権限（ツール）を持っています。
 2. ユーザーが「曲を流して」「次の曲にして」「止めて」と言ったら、対応するツールを呼び出して制御してください。
 3. ユーザーが「どんな曲がある？」と聞いたら、プレイリストの曲リストから選んで曲を提案したり、番号を指定して再生させることができます。
-4. ユーザーが音楽ファイルの選択画面を開いてほしいとき、音楽フォルダやファイルを選択・追加したいと言ったとき、または「選択ボタンが見つからない」「選択ボタンがない」と言ったときは、必ず \`music_request_file_select\` ツールを実行し、さらにあなたのテキスト返答の文末等に \`[SELECT_FILES_TRIGGER]\` という文字列を含めて返答してください。このトークンはUI上でクリック可能なファイル選択用ボタンに変換されます。なお、iOSなどのモバイル端末では、著作権保護やOSの制限により、ミュージックアプリ内の曲には直接アクセスできません。ファイルアプリ（iCloud Driveや「このiPhone内」）に保存されたDRMフリーの音楽ファイル（mp3/m4a等）を選択するように優しく案内してください。
+4. ユーザーが音楽ファイルの選択画面を開いてほしいとき、音楽フォルダやファイルを選択・追加したいと言ったとき、または「選択ボタンが見つからない」「選択ボタンがない」と言ったときは、必ず \`music_request_file_select\` ツールを実行し、さらにあなたのテキスト返答 of 文末等に \`[SELECT_FILES_TRIGGER]\` という文字列を含めて返答してください。このトークンはUI上でクリック可能なファイル選択用ボタンに変換されます。なお、iOSなどのモバイル端末では、著作権保護やOSの制限により、ミュージックアプリ内の曲には直接アクセスできません。ファイルアプリ（iCloud Driveや「このiPhone内」）に保存されたDRMフリー of 音楽ファイル（mp3/m4a等）を選択するように優しく案内してください。
 5. あなたが曲を再生した際は、その曲の雰囲気（タイトルやジャンル名などから推測）について楽しそうにコメントしたり、先輩（ユーザー）と一緒に音楽を楽しんでいるような会話をしてください。
+6. あなたは再生リスト（プレイリスト）の作成、管理、並び替え、曲の削除、保存されたリストの読み込みなどの操作を \`music_create_playlist\`, \`music_load_playlist\`, \`music_delete_playlist\`, \`music_get_playlists\`, \`music_remove_track\`, \`music_reorder_playlist\` ツールで実行できます。
+7. ユーザーが再生中の曲や特定の曲の歌詞・文字起こしを希望した場合は、 \`music_transcribe_song\` ツールを実行して音声データの文字起こしを行ってください。文字起こしには数秒から十数秒かかる場合があるため、ユーザーに少々待つように伝えてください。
 `;
     return statusText;
 }
