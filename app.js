@@ -99,7 +99,7 @@ function init() {
 }
 
 function preloadMusicPortraits() {
-    const v = '?v=9';
+    const v = '?v=10';
     const imagesToPreload = [
         'assets/elena_mono_put_headphones.jpg' + v,
         'assets/elena_mono_low_headphones.jpg' + v,
@@ -1951,7 +1951,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=9';
+    const v = '?v=10';
     
     if (isPuttingHeadphones || isRemovingHeadphones) {
         portrait.src = 'assets/elena_mono_put_headphones.jpg' + v;
@@ -1962,9 +1962,16 @@ function updatePortraitUI() {
     let suffix = '';
     let ext = 'png';
     if (isPlaying) {
-        // 音楽再生中は、画像の高速切り替えによる手や目のチラつき・ブレを100%防止するため、
-        // 「目は普通に開き、手はヘッドホンに当てたまま」の静止画（low_open_eyes_headphones）で完全に固定します。
-        state = 'low_open_eyes';
+        // 音楽再生中の表情制御:
+        // - 会話していない時: 目を閉じて音楽を楽しんでいる姿 (low_headphones)
+        // - 会話中: 目を開けて口を動かす (talk_headphones / low_open_eyes_headphones を交互)
+        if (talkInterval) {
+            // 会話中: currentPortraitState ('talk' or 'low') に基づいて切り替え
+            state = (currentPortraitState === 'talk') ? 'talk' : 'low_open_eyes';
+        } else {
+            // 音楽だけ聴いている時: 目を閉じてリラックス
+            state = 'low';
+        }
         suffix = '_headphones';
         ext = 'jpg';
     }
