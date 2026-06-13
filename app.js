@@ -84,7 +84,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.01] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.02] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -101,7 +101,7 @@ async function init() {
     initMusicPlayer();
     preloadMusicPortraits();
     await restorePlayerState();
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.01] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.02] Ready.");
 }
 
 function preloadMusicPortraits() {
