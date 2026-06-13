@@ -1962,16 +1962,9 @@ function updatePortraitUI() {
     let suffix = '';
     let ext = 'png';
     if (isPlaying) {
-        if (talkInterval) {
-            // 話している最中（口パク中）は、目がパチパチ閉じてしまわないように開いた状態を維持する。
-            // 口が開いている時は 'talk' (talk_headphones.jpg)、閉じている時は 'low_open_eyes' (low_open_eyes_headphones.jpg)
-            if (state !== 'talk') {
-                state = 'low_open_eyes';
-            }
-        } else {
-            // 黙って音楽を聴いているときは、目を瞑った状態 ('low' = low_headphones.jpg) にフォールバックする
-            state = 'low';
-        }
+        // 音楽再生中は、画像の高速切り替えによる手や目のチラつき・ブレを100%防止するため、
+        // 「目は普通に開き、手はヘッドホンに当てたまま」の静止画（low_open_eyes_headphones）で完全に固定します。
+        state = 'low_open_eyes';
         suffix = '_headphones';
         ext = 'jpg';
     }
