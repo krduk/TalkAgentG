@@ -42,10 +42,12 @@ let playMode = 'normal'; // 'normal', 'repeat-all', 'repeat-one', 'shuffle'
 let musicAudio = null;
 let musicSource = null;
 let musicAnalyser = null;
+let musicGainNode = null;
 let visualizerCanvas = null;
 let visualizerCtx = null;
 let visualizerAnimationId = null;
 let currentPortraitState = 'low'; // 'low', 'talk', 'smile', 'thinking', 'error'
+let isPuttingHeadphones = false;
 
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
@@ -514,7 +516,7 @@ async function getGeminiResponse() {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
     
     // Filter out system messages from context window before slicing to ensure API consistency
-    const chatOnlyHistory = chatHistory.filter(msg => msg.role === 'user' || msg.role === 'model');
+    const chatOnlyHistory = chatHistory.filter(msg => msg.role === 'user' || msg.role === 'model' || msg.role === 'function');
     // Capping conversation history at last 10 messages for speed & tokens
     const maxContext = 10;
     const historySlice = chatOnlyHistory.slice(-maxContext);
@@ -712,7 +714,7 @@ ${musicStatusText}
             
             // 2. Save tool response turn to history
             chatHistory.push({
-                role: 'user', // Tool responses are sent as 'user' role with 'functionResponse' parts
+                role: 'function',
                 parts: toolResponseParts
             });
             
@@ -1408,14 +1410,66 @@ function connectMusicToAudioContext() {
             musicAnalyser = audioCtx.createAnalyser();
             musicAnalyser.fftSize = 64; // Blocky 32 bars visualizer
             
+            musicGainNode = audioCtx.createGain();
+            musicGainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
+            
             musicSource = audioCtx.createMediaElementSource(musicAudio);
             musicSource.connect(musicAnalyser);
-            musicAnalyser.connect(audioCtx.destination);
+            musicAnalyser.connect(musicGainNode);
+            musicGainNode.connect(audioCtx.destination);
             
             startVisualizer();
         } catch (e) {
             console.error("Failed to connect music audio source to AudioContext:", e);
         }
+    }
+}
+
+function triggerPuttingHeadphonesAnimation() {
+    isPuttingHeadphones = true;
+    updatePortraitUI();
+    setTimeout(() => {
+        isPuttingHeadphones = false;
+        updatePortraitUI();
+    }, 800);
+}
+
+function fadeAndPauseMusic() {
+    if (!musicAudio) return;
+    isPlaying = false;
+    updatePortraitUI();
+    
+    if (musicGainNode && audioCtx) {
+        const fadeTime = 0.15; // 150ms
+        musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, audioCtx.currentTime);
+        musicGainNode.gain.linearRampToValueAtTime(0.0, audioCtx.currentTime + fadeTime);
+        setTimeout(() => {
+            if (!isPlaying) {
+                musicAudio.pause();
+            }
+        }, fadeTime * 1000);
+    } else {
+        musicAudio.pause();
+    }
+}
+
+function playMusicWithFade() {
+    if (!musicAudio) return Promise.reject("No audio object");
+    
+    initMusicAudio();
+    connectMusicToAudioContext();
+    
+    isPlaying = true;
+    triggerPuttingHeadphonesAnimation();
+    
+    if (musicGainNode && audioCtx) {
+        const fadeTime = 0.2; // 200ms
+        musicGainNode.gain.setValueAtTime(0.0, audioCtx.currentTime);
+        return musicAudio.play().then(() => {
+            musicGainNode.gain.linearRampToValueAtTime(1.0, audioCtx.currentTime + fadeTime);
+        });
+    } else {
+        return musicAudio.play();
     }
 }
 
@@ -1610,30 +1664,38 @@ function playTrack(index) {
     initMusicAudio();
     connectMusicToAudioContext();
     
-    currentTrackIndex = index;
-    const track = playlist[index];
-    
-    if (musicAudio.src) {
-        URL.revokeObjectURL(musicAudio.src);
+    const loadAndPlay = () => {
+        currentTrackIndex = index;
+        const track = playlist[index];
+        
+        if (musicAudio.src) {
+            URL.revokeObjectURL(musicAudio.src);
+        }
+        
+        const fileUrl = URL.createObjectURL(track.file);
+        musicAudio.src = fileUrl;
+        
+        playMusicWithFade()
+            .then(() => {
+                updatePlayPauseButton();
+                updateNowPlayingUI();
+                renderPlaylist();
+                updateMediaSession(track);
+                scrollActivePlaylistItemIntoView();
+            })
+            .catch(err => {
+                console.error("Playback error:", err);
+                appendSystemMessage(`PLAYBACK ERROR: ${track.name}`);
+            });
+    };
+
+    if (isPlaying && musicGainNode && audioCtx) {
+        musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, audioCtx.currentTime);
+        musicGainNode.gain.linearRampToValueAtTime(0.0, audioCtx.currentTime + 0.15);
+        setTimeout(loadAndPlay, 150);
+    } else {
+        loadAndPlay();
     }
-    
-    const fileUrl = URL.createObjectURL(track.file);
-    musicAudio.src = fileUrl;
-    
-    musicAudio.play()
-        .then(() => {
-            isPlaying = true;
-            updatePlayPauseButton();
-            updateNowPlayingUI();
-            renderPlaylist();
-            updateMediaSession(track);
-            scrollActivePlaylistItemIntoView();
-            updatePortraitUI();
-        })
-        .catch(err => {
-            console.error("Playback error:", err);
-            appendSystemMessage(`PLAYBACK ERROR: ${track.name}`);
-        });
 }
 
 function toggleMusicPlayback() {
@@ -1648,12 +1710,9 @@ function toggleMusicPlayback() {
     connectMusicToAudioContext();
     
     if (isPlaying) {
-        musicAudio.pause();
-        isPlaying = false;
-        updatePortraitUI();
+        fadeAndPauseMusic();
     } else {
-        musicAudio.play()
-            .then(() => { isPlaying = true; updatePortraitUI(); })
+        playMusicWithFade()
             .catch(err => console.error("Play resume failed:", err));
     }
     updatePlayPauseButton();
@@ -1863,6 +1922,11 @@ function updatePortraitUI() {
     const selectedColorMode = config.agentColorMode || 'mono';
     if (selectedColorMode === 'default') {
         portrait.src = 'assets/elena_pixel.png';
+        return;
+    }
+    
+    if (isPuttingHeadphones) {
+        portrait.src = 'assets/elena_mono_put_headphones.jpg';
         return;
     }
     
