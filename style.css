@@ -899,9 +899,6 @@ input[type="checkbox"]:checked + .switch-slider::after {
 
 .sources-list li {
     margin-bottom: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .sources-list a {
@@ -912,4 +909,212 @@ input[type="checkbox"]:checked + .switch-slider::after {
 .sources-list a:hover {
     color: #ffffff;
     text-decoration: underline;
+}
+
+/* ==========================================
+   SOUND BOARD (MUSIC PLAYER) STYLES
+   ========================================== */
+
+/* Music Player Panel */
+.music-player-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 15px;
+    gap: 10px;
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Visualizer */
+.visualizer-canvas {
+    width: 100%;
+    height: 35px;
+    background: #000000;
+    border: 2px solid var(--retro-cyan);
+    image-rendering: pixelated;
+}
+
+/* Track Info */
+.track-info {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.85rem;
+    color: var(--retro-green);
+    overflow: hidden;
+}
+
+.track-title-text {
+    font-weight: bold;
+    color: var(--retro-cyan);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.95rem;
+}
+
+/* Progress Bar */
+.playback-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--retro-green);
+}
+
+.time-display {
+    width: 35px;
+    text-align: center;
+}
+
+.music-progress-bar {
+    flex: 1;
+    height: 12px;
+    background: #000033;
+    border: 2px solid var(--retro-green);
+    padding: 1px;
+    cursor: pointer;
+}
+
+.music-progress-fill {
+    height: 100%;
+    background-color: var(--retro-green);
+    width: 0%;
+}
+
+/* Controls */
+.playback-controls {
+    display: flex;
+    gap: 4px;
+    justify-content: space-between;
+}
+
+.music-ctrl-btn {
+    flex: 1;
+    padding: 4px 2px;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.source-controls {
+    display: flex;
+    gap: 6px;
+}
+
+.source-controls .retro-btn {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+/* Playlist */
+.playlist-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    gap: 4px;
+}
+
+.playlist-title {
+    font-size: 0.85rem;
+    color: var(--retro-cyan);
+}
+
+.playlist-list {
+    flex: 1;
+    list-style: none;
+    background-color: #000000;
+    border: 2px solid var(--retro-cyan);
+    overflow-y: auto;
+    padding: 2px;
+    min-height: 80px;
+}
+
+/* Reusing the retro scrollbar theme for playlist */
+.playlist-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.playlist-list::-webkit-scrollbar-track {
+    background: #000022;
+}
+
+.playlist-list::-webkit-scrollbar-thumb {
+    background: var(--retro-cyan);
+}
+
+.playlist-item {
+    cursor: pointer;
+    padding: 4px 6px;
+    font-size: 0.8rem;
+    color: var(--retro-green);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.playlist-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+}
+
+.playlist-item.active {
+    background-color: rgba(0, 255, 204, 0.1);
+    color: var(--retro-cyan);
+    font-weight: bold;
+    border: 1px dashed var(--retro-cyan);
+    padding: 3px 5px;
+}
+
+.empty-list {
+    padding: 10px;
+    text-align: center;
+    color: var(--retro-magenta);
+    font-size: 0.8rem;
+}
+
+/* Media Query Adaptations for Mobile inside Portrait Section */
+@media (max-width: 900px) {
+    .portrait-section .source-controls,
+    .portrait-section .playlist-container {
+        display: none !important;
+    }
+    
+    .music-player-panel {
+        flex: 1;
+        padding: 8px 12px;
+        justify-content: center;
+        gap: 4px;
+        background: transparent;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+    
+    .visualizer-canvas {
+        height: 20px;
+    }
+    
+    .playback-progress {
+        font-size: 0.75rem;
+        gap: 4px;
+    }
+    
+    .music-progress-bar {
+        height: 8px;
+    }
+    
+    .playback-controls {
+        gap: 2px;
+    }
+    
+    .music-ctrl-btn {
+        padding: 2px 1px;
+        font-size: 0.75rem;
+    }
 }

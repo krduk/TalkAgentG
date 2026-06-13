@@ -34,6 +34,19 @@ let calendarEventsText = "Googleカレンダーは同期されていません。
 let talkInterval = null;
 let isMouthOpen = false;
 
+// Sound Board (Music Player) State
+let playlist = [];
+let currentTrackIndex = -1;
+let isPlaying = false;
+let playMode = 'normal'; // 'normal', 'repeat-all', 'repeat-one', 'shuffle'
+let musicAudio = null;
+let musicSource = null;
+let musicAnalyser = null;
+let visualizerCanvas = null;
+let visualizerCtx = null;
+let visualizerAnimationId = null;
+let currentPortraitState = 'low'; // 'low', 'talk', 'smile', 'thinking', 'error'
+
 // DOM Elements
 const chatMessages = document.getElementById('chatMessages');
 const chatForm = document.getElementById('chatForm');
@@ -78,6 +91,7 @@ function init() {
     }
     
     loadChatHistory();
+    initMusicPlayer();
 }
 
 // Load Settings from LocalStorage
@@ -138,18 +152,13 @@ function updateUIFromSettings() {
     systemPromptInput.value = config.systemPrompt;
 
     // Update portrait container color mode class and image source
-    const portrait = document.getElementById('characterPortrait');
-    if (portrait && portraitContainer) {
+    if (portraitContainer) {
         portraitContainer.classList.remove('color-default', 'color-green', 'color-amber', 'color-cyan', 'color-mono');
         const selectedColorMode = config.agentColorMode || 'mono';
         portraitContainer.classList.add(`color-${selectedColorMode}`);
         
-        // Dynamically switch image source depending on the color mode
-        if (selectedColorMode === 'default') {
-            portrait.src = 'assets/elena_pixel.png';
-        } else {
-            portrait.src = 'assets/elena_mono_low.png';
-        }
+        currentPortraitState = 'low';
+        updatePortraitUI();
     }
     
     soundStatusDisplay.textContent = config.soundEnabled ? "ON" : "OFF";
@@ -325,7 +334,7 @@ function handleFormSubmit(e) {
     typingIndicator.classList.remove('hidden');
     
     if (config.mode === 'api' && config.apiKey) {
-        getGeminiResponse(text);
+        getGeminiResponse();
     } else {
         // Fallback or Mock mode
         setTimeout(() => {
@@ -423,12 +432,13 @@ function appendElenaMessage(text, groundingMetadata = null) {
         }
         
         // Show smiling expression on message completion temporarily
-        const portrait = document.getElementById('characterPortrait');
-        if (portrait && config.agentColorMode !== 'default') {
-            portrait.src = 'assets/elena_mono_smile.png';
+        if (config.agentColorMode !== 'default') {
+            currentPortraitState = 'smile';
+            updatePortraitUI();
             setTimeout(() => {
-                if (emotionDisplay.textContent === 'STABLE') {
-                    portrait.src = 'assets/elena_mono_low.png';
+                if (currentPortraitState === 'smile') {
+                    currentPortraitState = 'low';
+                    updatePortraitUI();
                 }
             }, 3000);
         }
@@ -483,9 +493,8 @@ function typeWriter(element, text, index, callback) {
 }
 
 // Get Response from Gemini API
-async function getGeminiResponse(userText) {
+async function getGeminiResponse() {
     const model = config.geminiModel || 'gemini-3.1-flash-lite';
-    // systemInstruction is a beta feature, so we must use the v1beta endpoint
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
     
     // Filter out system messages from context window before slicing to ensure API consistency
@@ -494,13 +503,23 @@ async function getGeminiResponse(userText) {
     const maxContext = 10;
     const historySlice = chatOnlyHistory.slice(-maxContext);
     
-    const contents = historySlice.map(msg => ({
-        role: msg.role,
-        parts: [{ text: msg.text }]
-    }));
+    const contents = historySlice.map(msg => {
+        let parts = [];
+        if (msg.parts) {
+            parts = msg.parts;
+        } else {
+            parts = [{ text: msg.text || "" }];
+        }
+        return {
+            role: msg.role,
+            parts: parts
+        };
+    });
 
-    // Inject dynamic time context and behavior instructions
+    // Inject dynamic context (time, calendar, and MUSIC PLAYER state)
     const localTimeStr = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+    const musicStatusText = getMusicStatusTextForGemini();
+    
     const dynamicSystemInstruction = `${config.systemPrompt}
 
 [SYSTEM_CONTEXT]
@@ -511,15 +530,60 @@ OPERATOR_NAME: ${config.userName}
 [GOOGLE_CALENDAR_EVENTS]
 ${calendarEventsText}
 
+${musicStatusText}
+
 [BEHAVIOR_GUIDELINES]
 1. 連携されていないデータ（天気予報など）について聞かれた場合は、情報を創作（でっち上げ）せず、簡潔に「現在データが同期されていない」旨を伝えてください。
 2. 天気などを聞かれた際、場所や日時が不明でも聞き返さず、想定地（東京）の季節（例えば6月なら梅雨）や現在の時間帯に合わせた一般的なアドバイスや、カレンダーへの予定登録などを提案してください。
-3. カレンダーに関しては[GOOGLE_CALENDAR_EVENTS]セクションに記載された本物のデータのみを正として扱い、予定をでっち上げてはいけません。カレンダーが未同期（「同期されていません」とある）の場合は、架空の予定を告げず、カレンダーが未連携である旨を報告して設定からのリンクを促してください。
-4. ユーザーの利便性を最優先し、SF的なロールプレイ表現で嘘 ofデータ（でっち上げの予定や架空の気象情報など）を報告しないようにしてください。
+3. カレンダーに関しては[GOOGLE_CALENDAR_EVENTS]セクションに記載された本物のデータのみを正として扱い、予定をでっち上げてはいけません。
+4. ユーザーの利便性を最優先し、SF的なロールプレイ表現で嘘のデータ（でっち上げの予定や架空の気象情報など）を報告しないようにしてください。
 5. 対話相手であるオペレーター（ユーザー）の名前は「${config.userName}」です。キャラクターの性格（ギャルオペレーター・ルナ）を維持しつつ、必要に応じてこの名前、または親しみを込めて「先輩」と呼んで話しかけてください。`;
+
+    const tools = [
+        {
+            functionDeclarations: [
+                {
+                    name: "music_play",
+                    description: "Play a specific song from the playlist by its 1-based index.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            index: {
+                                type: "INTEGER",
+                                description: "The 1-based index of the song to play."
+                            }
+                        },
+                        required: ["index"]
+                    }
+                },
+                {
+                    name: "music_toggle",
+                    description: "Play or pause the current music playback."
+                },
+                {
+                    name: "music_next",
+                    description: "Skip to the next song in the playlist."
+                },
+                {
+                    name: "music_prev",
+                    description: "Skip back to the previous song in the playlist."
+                },
+                {
+                    name: "music_get_playlist",
+                    description: "Get the current list of songs loaded in the playlist."
+                }
+            ]
+        }
+    ];
+
+    const requestTools = [...tools];
+    if (config.googleSearchEnabled) {
+        requestTools.push({ googleSearch: {} });
+    }
 
     const payload = {
         contents: contents,
+        tools: requestTools,
         systemInstruction: {
             parts: [{ text: dynamicSystemInstruction }]
         },
@@ -528,12 +592,6 @@ ${calendarEventsText}
             temperature: 0.7
         }
     };
-
-    if (config.googleSearchEnabled) {
-        payload.tools = [
-            { googleSearch: {} }
-        ];
-    }
 
     try {
         const response = await fetch(url, {
@@ -550,8 +608,91 @@ ${calendarEventsText}
         }
 
         const data = await response.json();
-        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        const groundingMetadata = data.candidates?.[0]?.groundingMetadata;
+        const candidate = data.candidates?.[0];
+        
+        // Check if Gemini triggered function calling
+        const functionCalls = candidate?.content?.parts?.filter(part => part.functionCall);
+        
+        if (functionCalls && functionCalls.length > 0) {
+            // 1. Save model's turn with function calls to history
+            chatHistory.push({
+                role: 'model',
+                parts: candidate.content.parts
+            });
+            
+            const toolResponseParts = [];
+            
+            for (const call of functionCalls) {
+                const { name, args } = call.functionCall;
+                let result = {};
+                
+                if (name === 'music_play') {
+                    const idx = args.index;
+                    if (playlist.length === 0) {
+                        result = { status: "error", message: "Playlist is currently empty. Tell the user to load files first." };
+                    } else if (idx < 1 || idx > playlist.length) {
+                        result = { status: "error", message: `Invalid index. Playlist size is ${playlist.length}.` };
+                    } else {
+                        playTrack(idx - 1);
+                        result = { status: "success", message: `Started playing track ${idx}: "${playlist[idx - 1].name}"` };
+                        appendSystemMessage(`LUNA: PLAY TRACK #${idx}`);
+                    }
+                } else if (name === 'music_toggle') {
+                    if (playlist.length === 0) {
+                        result = { status: "error", message: "Playlist is empty." };
+                    } else {
+                        toggleMusicPlayback();
+                        result = { status: "success", message: `Playback state toggled. Now playing is: ${isPlaying}` };
+                        appendSystemMessage(`LUNA: TOGGLE PLAYBACK (PLAYING=${isPlaying})`);
+                    }
+                } else if (name === 'music_next') {
+                    if (playlist.length === 0) {
+                        result = { status: "error", message: "Playlist is empty." };
+                    } else {
+                        playNextTrack();
+                        result = { status: "success", message: `Skipped to next track. Now playing: "${playlist[currentTrackIndex].name}"` };
+                        appendSystemMessage("LUNA: NEXT TRACK");
+                    }
+                } else if (name === 'music_prev') {
+                    if (playlist.length === 0) {
+                        result = { status: "error", message: "Playlist is empty." };
+                    } else {
+                        playPreviousTrack();
+                        result = { status: "success", message: `Skipped to previous track. Now playing: "${playlist[currentTrackIndex].name}"` };
+                        appendSystemMessage("LUNA: PREV TRACK");
+                    }
+                } else if (name === 'music_get_playlist') {
+                    if (playlist.length === 0) {
+                        result = { status: "success", playlist: [], message: "Playlist is empty." };
+                    } else {
+                        const list = playlist.slice(0, 30).map((t, i) => ({ index: i + 1, name: t.name }));
+                        result = { status: "success", playlist: list, total: playlist.length };
+                    }
+                }
+                
+                toolResponseParts.push({
+                    functionResponse: {
+                        name: name,
+                        response: result
+                    }
+                });
+            }
+            
+            // 2. Save tool response turn to history
+            chatHistory.push({
+                role: 'user', // Tool responses are sent as 'user' role with 'functionResponse' parts
+                parts: toolResponseParts
+            });
+            
+            saveChatHistory();
+            
+            // 3. Make follow-up API call to explain what was done
+            await getGeminiResponse();
+            return;
+        }
+
+        const responseText = candidate?.content?.parts?.[0]?.text;
+        const groundingMetadata = candidate?.groundingMetadata;
         
         if (responseText) {
             appendElenaMessage(responseText, groundingMetadata);
@@ -649,8 +790,9 @@ function updateHUD(status) {
             syncRateBar.style.width = '100%';
             syncRateVal.textContent = '100%';
         }
-        if (portrait && isRetro) {
-            portrait.src = 'assets/elena_mono_thinking.png';
+        if (isRetro) {
+            currentPortraitState = 'thinking';
+            updatePortraitUI();
         }
     } else if (status === 'ERROR') {
         emotionDisplay.className = 'hud-value';
@@ -662,8 +804,9 @@ function updateHUD(status) {
             syncRateBar.style.width = '20%';
             syncRateVal.textContent = '20%';
         }
-        if (portrait && isRetro) {
-            portrait.src = 'assets/elena_mono_error.png';
+        if (isRetro) {
+            currentPortraitState = 'error';
+            updatePortraitUI();
         }
     } else {
         // STABLE
@@ -676,8 +819,9 @@ function updateHUD(status) {
             syncRateBar.style.width = '85%';
             syncRateVal.textContent = '85%';
         }
-        if (portrait && isRetro) {
-            portrait.src = 'assets/elena_mono_low.png';
+        if (isRetro) {
+            currentPortraitState = 'low';
+            updatePortraitUI();
         }
     }
 }
@@ -905,7 +1049,8 @@ function startTalkingAnimation() {
     
     talkInterval = setInterval(() => {
         isMouthOpen = !isMouthOpen;
-        portrait.src = isMouthOpen ? 'assets/elena_mono_talk.png' : 'assets/elena_mono_low.png';
+        currentPortraitState = isMouthOpen ? 'talk' : 'low';
+        updatePortraitUI();
     }, 180); // Alternate mouth state every 180ms
 }
 
@@ -915,9 +1060,9 @@ function stopTalkingAnimation() {
         talkInterval = null;
     }
     isMouthOpen = false;
-    const portrait = document.getElementById('characterPortrait');
-    if (portrait && config.agentColorMode !== 'default') {
-        portrait.src = 'assets/elena_mono_low.png'; // Revert to closed mouth
+    if (config.agentColorMode !== 'default') {
+        currentPortraitState = 'low';
+        updatePortraitUI(); // Revert to closed mouth
     }
 }
 
@@ -927,6 +1072,16 @@ document.addEventListener('DOMContentLoaded', init);
 // Chat History Save & Load Functions
 function saveChatHistory() {
     localStorage.setItem('cosmos_elena_chat_history_retro', JSON.stringify(chatHistory));
+}
+
+// Helper to extract text from messages that might contain parts (Gemini format)
+function getMessageText(msg) {
+    if (msg.text) return msg.text;
+    if (msg.parts) {
+        const textPart = msg.parts.find(p => p.text);
+        return textPart ? textPart.text : '';
+    }
+    return '';
 }
 
 function loadChatHistory() {
@@ -941,28 +1096,34 @@ function loadChatHistory() {
                 chatHistory.forEach(msg => {
                     const messageDiv = document.createElement('div');
                     if (msg.role === 'user') {
+                        const txt = getMessageText(msg);
+                        if (!txt) return; // Skip function responses
                         messageDiv.className = 'message user-msg';
                         messageDiv.innerHTML = `
                             <div class="msg-sender">${escapeHTML(config.userName)}></div>
-                            <div class="msg-bubble">${escapeHTML(msg.text)}</div>
+                            <div class="msg-bubble">${escapeHTML(txt)}</div>
                         `;
+                        chatMessages.appendChild(messageDiv);
                     } else if (msg.role === 'model') {
+                        const txt = getMessageText(msg);
+                        if (!txt) return; // Skip function calls
                         messageDiv.className = 'message character-msg';
                         messageDiv.innerHTML = `
                             <div class="msg-sender">[ LUNA ]</div>
                             <div class="msg-bubble">
-                                <div>${escapeHTML(msg.text)}</div>
+                                <div>${escapeHTML(txt)}</div>
                             </div>
                         `;
+                        chatMessages.appendChild(messageDiv);
                     } else if (msg.role === 'system') {
                         messageDiv.className = 'message system-msg';
                         messageDiv.innerHTML = `
                             <div class="msg-content">
-                                *** ${escapeHTML(msg.text)} ***
+                                *** ${escapeHTML(msg.text || "")} ***
                             </div>
                         `;
+                        chatMessages.appendChild(messageDiv);
                     }
-                    chatMessages.appendChild(messageDiv);
                 });
                 scrollToBottom();
             }
@@ -1050,4 +1211,542 @@ function setupVisualViewport() {
 
     // Initial call to set size correctly
     handleViewportChange();
+}
+
+// ============================================================================
+// Sound Board (Music Player) Logic
+// ============================================================================
+
+function initMusicPlayer() {
+    // Check if directory picker is supported
+    const loadDirBtn = document.getElementById('musicLoadDirBtn');
+    if (loadDirBtn) {
+        if (typeof window.showDirectoryPicker === 'function') {
+            loadDirBtn.style.display = 'inline-block';
+        } else {
+            loadDirBtn.style.display = 'none';
+        }
+    }
+    
+    // Set up music controls event listeners
+    const playPauseBtn = document.getElementById('musicPlayBtn');
+    const prevBtn = document.getElementById('musicPrevBtn');
+    const nextBtn = document.getElementById('musicNextBtn');
+    const modeBtn = document.getElementById('musicModeBtn');
+    const loadFilesBtn = document.getElementById('musicLoadFilesBtn');
+    const fileInput = document.getElementById('musicFileInput');
+    const progressBar = document.getElementById('musicProgressBar');
+    
+    if (playPauseBtn) playPauseBtn.addEventListener('click', toggleMusicPlayback);
+    if (prevBtn) prevBtn.addEventListener('click', playPreviousTrack);
+    if (nextBtn) nextBtn.addEventListener('click', playNextTrack);
+    if (modeBtn) modeBtn.addEventListener('click', cyclePlayMode);
+    
+    if (loadDirBtn) {
+        loadDirBtn.addEventListener('click', selectMusicDirectory);
+    }
+    
+    if (loadFilesBtn && fileInput) {
+        loadFilesBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileInputChange);
+    }
+    
+    if (progressBar) {
+        progressBar.addEventListener('click', handleProgressBarClick);
+    }
+    
+    initMusicAudio();
+}
+
+function initMusicAudio() {
+    if (musicAudio) return;
+    
+    musicAudio = new Audio();
+    musicAudio.crossOrigin = "anonymous";
+    
+    musicAudio.addEventListener('ended', handleTrackEnded);
+    musicAudio.addEventListener('timeupdate', updatePlaybackProgress);
+    musicAudio.addEventListener('loadedmetadata', updatePlaybackDuration);
+}
+
+function connectMusicToAudioContext() {
+    // Ensure Web Audio API context is running
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    
+    if (!musicSource && audioCtx) {
+        try {
+            musicAnalyser = audioCtx.createAnalyser();
+            musicAnalyser.fftSize = 64; // Blocky 32 bars visualizer
+            
+            musicSource = audioCtx.createMediaElementSource(musicAudio);
+            musicSource.connect(musicAnalyser);
+            musicAnalyser.connect(audioCtx.destination);
+            
+            startVisualizer();
+        } catch (e) {
+            console.error("Failed to connect music audio source to AudioContext:", e);
+        }
+    }
+}
+
+function startVisualizer() {
+    visualizerCanvas = document.getElementById('visualizerCanvas');
+    if (!visualizerCanvas) return;
+    visualizerCtx = visualizerCanvas.getContext('2d');
+    
+    if (visualizerAnimationId) {
+        cancelAnimationFrame(visualizerAnimationId);
+    }
+    
+    function draw() {
+        visualizerAnimationId = requestAnimationFrame(draw);
+        if (!musicAnalyser || !visualizerCanvas || !visualizerCtx) return;
+        
+        const bufferLength = musicAnalyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        musicAnalyser.getByteFrequencyData(dataArray);
+        
+        const width = visualizerCanvas.width;
+        const height = visualizerCanvas.height;
+        
+        visualizerCtx.clearRect(0, 0, width, height);
+        
+        // Pick visualizer color based on active theme
+        let barColor = '#ffffff';
+        const mode = config.agentColorMode || 'mono';
+        if (mode === 'green') barColor = '#33ff33';
+        else if (mode === 'amber') barColor = '#ffb000';
+        else if (mode === 'cyan') barColor = '#00ffff';
+        else if (mode === 'mono') barColor = '#d0d0d0';
+        else barColor = '#33ffcc';
+        
+        visualizerCtx.fillStyle = barColor;
+        
+        const barWidth = (width / bufferLength) * 1.5;
+        let x = 0;
+        
+        for (let i = 0; i < bufferLength; i++) {
+            let percent = dataArray[i] / 255;
+            // Add a small idle vibration if playing but amplitude is low
+            if (isPlaying && percent < 0.05) {
+                percent = 0.05 + Math.random() * 0.03;
+            }
+            
+            const barHeight = percent * height;
+            visualizerCtx.fillRect(Math.floor(x), Math.floor(height - barHeight), Math.floor(barWidth - 2), Math.ceil(barHeight));
+            x += barWidth;
+        }
+    }
+    draw();
+}
+
+async function selectMusicDirectory() {
+    try {
+        const dirHandle = await window.showDirectoryPicker();
+        appendSystemMessage("SOUND_BOARD: SCANNING DIRECTORY...");
+        
+        playlist = [];
+        const files = await getFilesFromDirectory(dirHandle);
+        
+        if (files.length === 0) {
+            appendSystemMessage("SOUND_BOARD: NO AUDIO FILES FOUND.");
+            renderPlaylist();
+            updateNowPlayingUI();
+            return;
+        }
+        
+        files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        playlist = files;
+        currentTrackIndex = -1;
+        
+        appendSystemMessage(`SOUND_BOARD: LOADED ${playlist.length} TRACKS.`);
+        renderPlaylist();
+        updateNowPlayingUI();
+        
+        if (config.mode === 'api' && config.apiKey) {
+            setTimeout(() => {
+                appendElenaMessage(`先輩！音楽ファイル読み込み完了したよー！プレイリストに${playlist.length}曲入ったから、いつでも「曲かけて」って言ってね！`);
+            }, 1000);
+        }
+    } catch (err) {
+        console.error("Directory selection aborted or failed:", err);
+        if (err.name !== 'AbortError') {
+            appendSystemMessage("SOUND_BOARD: SCAN FAILED.");
+        }
+    }
+}
+
+async function getFilesFromDirectory(dirHandle) {
+    const files = [];
+    for await (const entry of dirHandle.values()) {
+        if (entry.kind === 'file') {
+            const file = await entry.getFile();
+            if (isAudioFile(file.name)) {
+                files.push({
+                    name: file.name,
+                    file: file
+                });
+            }
+        } else if (entry.kind === 'directory') {
+            const subFiles = await getFilesFromDirectory(entry);
+            files.push(...subFiles);
+        }
+    }
+    return files;
+}
+
+function handleFileInputChange(e) {
+    const selectedFiles = Array.from(e.target.files).filter(f => isAudioFile(f.name));
+    
+    if (selectedFiles.length === 0) {
+        appendSystemMessage("SOUND_BOARD: NO VALID AUDIO FILES SELECTED.");
+        return;
+    }
+    
+    selectedFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    
+    playlist = selectedFiles.map(file => ({
+        name: file.name,
+        file: file
+    }));
+    
+    currentTrackIndex = -1;
+    appendSystemMessage(`SOUND_BOARD: LOADED ${playlist.length} FILES.`);
+    renderPlaylist();
+    updateNowPlayingUI();
+    startVisualizer();
+    
+    if (config.mode === 'api' && config.apiKey) {
+        setTimeout(() => {
+            appendElenaMessage(`おっ、ファイル選んでくれたじゃん！${playlist.length}曲ロードしたよ！どの曲聞く？ルナが流してあげるよ！`);
+        }, 1000);
+    }
+}
+
+function isAudioFile(filename) {
+    return /\.(mp3|wav|ogg|m4a|flac|aac|webm)$/i.test(filename);
+}
+
+function renderPlaylist() {
+    const listEl = document.getElementById('playlistList');
+    if (!listEl) return;
+    
+    listEl.innerHTML = '';
+    if (playlist.length === 0) {
+        listEl.innerHTML = '<li class="empty-list">-- EMPTY --</li>';
+        return;
+    }
+    
+    playlist.forEach((track, index) => {
+        const li = document.createElement('li');
+        li.className = 'playlist-item';
+        if (index === currentTrackIndex) {
+            li.classList.add('active');
+        }
+        
+        const cleanName = track.name.replace(/\.[^/.]+$/, "");
+        
+        li.innerHTML = `
+            <span class="track-number">${(index + 1).toString().padStart(2, '0')}.</span>
+            <span class="track-name-text">${escapeHTML(cleanName)}</span>
+        `;
+        
+        li.addEventListener('click', () => {
+            playTrack(index);
+        });
+        listEl.appendChild(li);
+    });
+}
+
+function updateNowPlayingUI() {
+    const titleEl = document.getElementById('currentTrackTitle');
+    if (!titleEl) return;
+    
+    if (playlist.length === 0 || currentTrackIndex === -1) {
+        titleEl.textContent = 'NO TRACK SELECTED';
+        titleEl.classList.remove('neon-blue');
+    } else {
+        const track = playlist[currentTrackIndex];
+        const cleanName = track.name.replace(/\.[^/.]+$/, "");
+        titleEl.textContent = cleanName.toUpperCase();
+        titleEl.classList.add('neon-blue');
+    }
+}
+
+function playTrack(index) {
+    if (playlist.length === 0) return;
+    if (index < 0 || index >= playlist.length) return;
+    
+    initMusicAudio();
+    connectMusicToAudioContext();
+    
+    currentTrackIndex = index;
+    const track = playlist[index];
+    
+    if (musicAudio.src) {
+        URL.revokeObjectURL(musicAudio.src);
+    }
+    
+    const fileUrl = URL.createObjectURL(track.file);
+    musicAudio.src = fileUrl;
+    
+    musicAudio.play()
+        .then(() => {
+            isPlaying = true;
+            updatePlayPauseButton();
+            updateNowPlayingUI();
+            renderPlaylist();
+            updateMediaSession(track);
+            scrollActivePlaylistItemIntoView();
+            updatePortraitUI();
+        })
+        .catch(err => {
+            console.error("Playback error:", err);
+            appendSystemMessage(`PLAYBACK ERROR: ${track.name}`);
+        });
+}
+
+function toggleMusicPlayback() {
+    if (playlist.length === 0) return;
+    
+    if (currentTrackIndex === -1) {
+        playTrack(0);
+        return;
+    }
+    
+    initMusicAudio();
+    connectMusicToAudioContext();
+    
+    if (isPlaying) {
+        musicAudio.pause();
+        isPlaying = false;
+        updatePortraitUI();
+    } else {
+        musicAudio.play()
+            .then(() => { isPlaying = true; updatePortraitUI(); })
+            .catch(err => console.error("Play resume failed:", err));
+    }
+    updatePlayPauseButton();
+}
+
+function updatePlayPauseButton() {
+    const playBtn = document.getElementById('musicPlayBtn');
+    if (playBtn) {
+        playBtn.textContent = isPlaying ? '[▮▮]' : '[▶]';
+    }
+}
+
+function playNextTrack() {
+    if (playlist.length === 0) return;
+    
+    let nextIndex = currentTrackIndex + 1;
+    if (nextIndex >= playlist.length) {
+        nextIndex = 0;
+    }
+    playTrack(nextIndex);
+}
+
+function playPreviousTrack() {
+    if (playlist.length === 0) return;
+    
+    if (musicAudio && musicAudio.currentTime > 3) {
+        musicAudio.currentTime = 0;
+        updatePlaybackProgress();
+        return;
+    }
+    
+    let prevIndex = currentTrackIndex - 1;
+    if (prevIndex < 0) {
+        prevIndex = playlist.length - 1;
+    }
+    playTrack(prevIndex);
+}
+
+function cyclePlayMode() {
+    const modeBtn = document.getElementById('musicModeBtn');
+    if (!modeBtn) return;
+    
+    if (playMode === 'normal') {
+        playMode = 'repeat-all';
+        modeBtn.textContent = '[PLAY: LOOP ALL]';
+    } else if (playMode === 'repeat-all') {
+        playMode = 'repeat-one';
+        modeBtn.textContent = '[PLAY: LOOP ONE]';
+    } else if (playMode === 'repeat-one') {
+        playMode = 'shuffle';
+        modeBtn.textContent = '[PLAY: SHUFFLE]';
+    } else {
+        playMode = 'normal';
+        modeBtn.textContent = '[PLAY: NORMAL]';
+    }
+    appendSystemMessage(`SOUND_BOARD: MODE -> ${playMode.toUpperCase()}`);
+}
+
+function handleTrackEnded() {
+    if (playlist.length === 0) return;
+    
+    if (playMode === 'repeat-one') {
+        musicAudio.currentTime = 0;
+        musicAudio.play().catch(e => console.error(e));
+        return;
+    }
+    
+    if (playMode === 'shuffle') {
+        let randomIndex = currentTrackIndex;
+        if (playlist.length > 1) {
+            while (randomIndex === currentTrackIndex) {
+                randomIndex = Math.floor(Math.random() * playlist.length);
+            }
+        } else {
+            randomIndex = 0;
+        }
+        playTrack(randomIndex);
+        return;
+    }
+    
+    let nextIndex = currentTrackIndex + 1;
+    if (nextIndex >= playlist.length) {
+        if (playMode === 'repeat-all') {
+            playTrack(0);
+        } else {
+            isPlaying = false;
+            updatePlayPauseButton();
+            appendSystemMessage("SOUND_BOARD: PLAYBACK COMPLETED.");
+            updatePortraitUI();
+        }
+    } else {
+        playTrack(nextIndex);
+    }
+}
+
+function updatePlaybackProgress() {
+    const progressFill = document.getElementById('musicProgressFill');
+    const currentTimeEl = document.getElementById('musicCurrentTime');
+    
+    if (!musicAudio || isNaN(musicAudio.duration)) return;
+    
+    const pct = (musicAudio.currentTime / musicAudio.duration) * 100;
+    if (progressFill) {
+        progressFill.style.width = `${pct}%`;
+    }
+    if (currentTimeEl) {
+        currentTimeEl.textContent = formatTime(musicAudio.currentTime);
+    }
+}
+
+function updatePlaybackDuration() {
+    const durationEl = document.getElementById('musicDuration');
+    if (musicAudio && !isNaN(musicAudio.duration) && durationEl) {
+        durationEl.textContent = formatTime(musicAudio.duration);
+    }
+}
+
+function handleProgressBarClick(e) {
+    const progressBar = document.getElementById('musicProgressBar');
+    if (!progressBar || !musicAudio || isNaN(musicAudio.duration) || playlist.length === 0) return;
+    
+    const rect = progressBar.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickPct = clickX / rect.width;
+    
+    musicAudio.currentTime = clickPct * musicAudio.duration;
+    updatePlaybackProgress();
+}
+
+function scrollActivePlaylistItemIntoView() {
+    const activeEl = document.querySelector('.playlist-item.active');
+    if (activeEl) {
+        activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+function updateMediaSession(track) {
+    if ('mediaSession' in navigator) {
+        const cleanName = track.name.replace(/\.[^/.]+$/, "");
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: cleanName,
+            artist: 'LUNA_OP SOUND_BOARD',
+            album: 'Local Folder Sync',
+            artwork: [
+                { src: 'assets/elena_pixel.png', sizes: '256x256', type: 'image/png' }
+            ]
+        });
+        
+        navigator.mediaSession.setActionHandler('play', toggleMusicPlayback);
+        navigator.mediaSession.setActionHandler('pause', toggleMusicPlayback);
+        navigator.mediaSession.setActionHandler('previoustrack', playPreviousTrack);
+        navigator.mediaSession.setActionHandler('nexttrack', playNextTrack);
+    }
+}
+
+function getMusicStatusTextForGemini() {
+    let statusText = `[SOUND_BOARD_STATUS]
+PLAYBACK_STATE: ${isPlaying ? 'PLAYING' : (playlist.length > 0 ? 'PAUSED' : 'STOPPED')}
+PLAY_MODE: ${playMode.toUpperCase()}
+`;
+
+    if (playlist.length > 0 && currentTrackIndex !== -1) {
+        const currentTrack = playlist[currentTrackIndex];
+        statusText += `CURRENT_TRACK: index=${currentTrackIndex + 1}, name="${currentTrack.name}"\n`;
+    } else {
+        statusText += `CURRENT_TRACK: none\n`;
+    }
+
+    statusText += `PLAYLIST_TRACKS_COUNT: ${playlist.length}\n`;
+    
+    if (playlist.length > 0) {
+        statusText += "PLAYLIST_TRACKS_LIST:\n";
+        const limit = Math.min(playlist.length, 25);
+        for (let i = 0; i < limit; i++) {
+            const isCurrent = i === currentTrackIndex ? " (NOW PLAYING)" : "";
+            statusText += `- ${i + 1}. ${playlist[i].name}${isCurrent}\n`;
+        }
+        if (playlist.length > limit) {
+            statusText += `- ...and ${playlist.length - limit} more tracks.\n`;
+        }
+    } else {
+        statusText += "PLAYLIST_TRACKS_LIST: (No tracks loaded. Tell the operator to use LOAD_DIR or SELECT_FILES buttons to select a folder or files from their PC.)\n";
+    }
+    
+    statusText += `
+[MUSIC_PLAYER_GUIDELINES]
+1. あなた（ルナ）は「SOUND_BOARD.SYS」のコントロール権限（ツール）を持っています。
+2. ユーザーが「曲を流して」「次の曲にして」「止めて」と言ったら、対応するツールを呼び出して制御してください。
+3. ユーザーが「どんな曲がある？」と聞いたら、プレイリストの曲リストから選んで曲を提案したり、番号を指定して再生させることができます。
+4. ローカルフォルダが読み込まれていない場合は、「設定の下の[ LOAD_DIR ]や[ LOAD_FILES ]から音楽フォルダ/ファイルを読み込んでね！」とフレンドリーに案内してください。
+5. あなたが曲を再生した際は、その曲の雰囲気（タイトルやジャンル名などから推測）について楽しそうにコメントしたり、先輩（ユーザー）と一緒に音楽を楽しんでいるような会話をしてください。
+`;
+    return statusText;
+}
+
+function formatTime(seconds) {
+    if (isNaN(seconds)) return "00:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function updatePortraitUI() {
+    const portrait = document.getElementById('characterPortrait');
+    if (!portrait) return;
+    
+    const selectedColorMode = config.agentColorMode || 'mono';
+    if (selectedColorMode === 'default') {
+        portrait.src = 'assets/elena_pixel.png';
+        return;
+    }
+    
+    let suffix = '';
+    let ext = 'png';
+    if (isPlaying && (currentPortraitState === 'low' || currentPortraitState === 'talk')) {
+        suffix = '_headphones';
+        ext = 'jpg';
+    }
+    
+    portrait.src = `assets/elena_mono_${currentPortraitState}${suffix}.${ext}`;
 }

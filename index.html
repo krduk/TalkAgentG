@@ -44,7 +44,7 @@
 
             <!-- Main CRT Workspace -->
             <main class="main-content">
-                <!-- Left: Pixel Art Portrait Window -->
+                <!-- Left: Pixel Art Portrait and Music Player Window -->
                 <section class="portrait-section retro-window">
                     <div class="window-title-bar">
                         <span class="window-title">PORTRAIT: LUNA_OP</span>
@@ -55,42 +55,58 @@
                         <img id="characterPortrait" src="assets/elena_mono_low.png" alt="Elena Pixel Art" class="portrait-image">
                     </div>
 
-                    <!-- System Diagnostics Panel to fill the empty space -->
-                    <div class="system-monitor-panel">
-                        <div class="window-title-bar sub-bar">
-                            <span class="window-title">SYSTEM_MONITOR.SYS</span>
-                        </div>
-                        <div class="monitor-content">
-                            <div class="monitor-line">
-                                <span class="m-label">CPU LOAD</span>
-                                <span id="cpuVal" class="m-val">08%</span>
-                                <div class="m-bar"><div id="cpuBar" class="m-fill" style="width: 8%;"></div></div>
-                            </div>
-                            <div class="monitor-line">
-                                <span class="m-label">RAM FREE</span>
-                                <span id="ramVal" class="m-val">640KB</span>
-                                <div class="m-bar"><div class="m-fill" style="width: 100%;"></div></div>
-                            </div>
-                            <div class="monitor-line">
-                                <span class="m-label">SYS SYNC</span>
-                                <span id="syncRateVal" class="m-val">85%</span>
-                                <div class="m-bar"><div id="syncRateBar" class="m-fill" style="width: 85%;"></div></div>
-                            </div>
-                        </div>
+                    <!-- Hidden HUD elements to prevent app.js from breaking -->
+                    <div style="display: none;">
+                        <span id="cpuVal"></span>
+                        <div id="cpuBar"></div>
+                        <span id="syncRateVal"></span>
+                        <div id="syncRateBar"></div>
+                        <span id="emotionDisplay"></span>
+                        <span id="soundStatusDisplay"></span>
+                        <div id="syncBar"><div class="stat-fill"></div></div>
                     </div>
 
-                    <div class="portrait-hud-bottom">
-                        <div class="hud-box">
-                            <span class="hud-label">EMOTION:</span>
-                            <span id="emotionDisplay" class="hud-value neon-blue">STABLE</span>
+                    <!-- Sound Board (Music Player) Panel -->
+                    <div class="music-player-panel">
+                        <!-- Visualizer -->
+                        <canvas id="visualizerCanvas" class="visualizer-canvas" width="240" height="35"></canvas>
+                        
+                        <!-- Track Info -->
+                        <div class="track-info">
+                            <span class="track-label">> TITLE:</span>
+                            <span id="currentTrackTitle" class="track-title-text text-truncate">NO TRACK SELECTED</span>
                         </div>
-                        <div class="hud-box">
-                            <span class="hud-label">BEEP SOUND:</span>
-                            <span id="soundStatusDisplay" class="hud-value">ON</span>
+                        
+                        <!-- Progress Bar -->
+                        <div class="playback-progress">
+                            <span id="musicCurrentTime" class="time-display">00:00</span>
+                            <div id="musicProgressBar" class="music-progress-bar">
+                                <div id="musicProgressFill" class="music-progress-fill"></div>
+                            </div>
+                            <span id="musicDuration" class="time-display">00:00</span>
                         </div>
-                        <div class="hud-stat">
-                            <span class="stat-name">SYNC-RATE</span>
-                            <div id="syncBar" class="stat-bar"><div class="stat-fill" style="width: 85%;"></div></div>
+
+                        <!-- Controls -->
+                        <div class="playback-controls">
+                            <button id="musicPrevBtn" class="retro-btn music-ctrl-btn" title="前へ">[|◀]</button>
+                            <button id="musicPlayBtn" class="retro-btn music-ctrl-btn" title="再生/一時停止">[▶]</button>
+                            <button id="musicNextBtn" class="retro-btn music-ctrl-btn" title="次へ">[▶|]</button>
+                            <button id="musicModeBtn" class="retro-btn music-ctrl-btn" title="再生モード">[PLAY: NORMAL]</button>
+                        </div>
+
+                        <!-- Source Select Buttons -->
+                        <div class="source-controls">
+                            <button id="musicLoadDirBtn" class="retro-btn">[ LOAD_DIR ]</button>
+                            <button id="musicLoadFilesBtn" class="retro-btn">[ SELECT_FILES ]</button>
+                            <input type="file" id="musicFileInput" multiple accept="audio/*" style="display: none;">
+                        </div>
+
+                        <!-- Playlist Container -->
+                        <div class="playlist-container">
+                            <div class="playlist-title">> PLAY_LIST</div>
+                            <ul id="playlistList" class="playlist-list">
+                                <li class="empty-list">-- EMPTY --</li>
+                            </ul>
                         </div>
                     </div>
                 </section>

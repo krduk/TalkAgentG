@@ -1,4 +1,4 @@
-const CACHE_NAME = 'luna-v1';
+const CACHE_NAME = 'luna-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,9 @@ const ASSETS = [
   './assets/elena_mono_talk.png',
   './assets/elena_mono_smile.png',
   './assets/elena_mono_thinking.png',
-  './assets/elena_mono_error.png'
+  './assets/elena_mono_error.png',
+  './assets/elena_mono_low_headphones.jpg',
+  './assets/elena_mono_talk_headphones.jpg'
 ];
 
 self.addEventListener('install', (e) => {
