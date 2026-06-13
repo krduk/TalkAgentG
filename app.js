@@ -743,6 +743,77 @@ ${musicStatusText}
 
 // Mock Responses for offline mode
 function getMockResponse(text) {
+    const normText = text.toLowerCase();
+    
+    // 1. 音楽選択・フォルダ・ボタンがない関連
+    if (normText.includes("選択") || normText.includes("選ぶ") || normText.includes("選んで") || 
+        normText.includes("フォルダ") || normText.includes("ファイル") || normText.includes("開いて") || 
+        normText.includes("ボタン") || normText.includes("追加") || normText.includes("ロード") ||
+        normText.includes("music")) {
+        
+        try {
+            const fileInput = document.getElementById('musicFileInput');
+            if (fileInput) fileInput.click();
+        } catch (e) {
+            console.warn("Mock: Direct click blocked:", e);
+        }
+        
+        return "了解だよ！音楽ファイルを選択できるように画面にボタンを表示するね！ここから好きな曲を選んでみて！ [SELECT_FILES_TRIGGER]";
+    }
+    
+    // 2. 音楽再生・停止関連
+    if (normText.includes("再生") || normText.includes("流して") || normText.includes("かけて") || normText.includes("スタート")) {
+        if (playlist.length === 0) {
+            return "プレイリストがまだ空っぽみたい。まずは音楽ファイルを選択して読み込んでみてね！ [SELECT_FILES_TRIGGER]";
+        }
+        if (!isPlaying) {
+            toggleMusicPlayback();
+        }
+        const currentTrack = playlist[currentTrackIndex !== -1 ? currentTrackIndex : 0];
+        return `はーい！「${currentTrack.name}」を再生するよ！ヘッドホン装着完了、一緒に聴こう！`;
+    }
+    
+    if (normText.includes("止めて") || normText.includes("一時停止") || normText.includes("ストップ") || normText.includes("消して")) {
+        if (isPlaying) {
+            toggleMusicPlayback();
+        }
+        return "オッケー、一時停止するね！";
+    }
+    
+    if (normText.includes("次") || normText.includes("スキップ")) {
+        if (playlist.length === 0) {
+            return "プレイリストが空だから次の曲にいけないよ。ファイルを選んでみてね！ [SELECT_FILES_TRIGGER]";
+        }
+        playNextTrack();
+        const currentTrack = playlist[currentTrackIndex];
+        return `次の曲「${currentTrack.name}」にスキップしたよ！`;
+    }
+    
+    if (normText.includes("前") || normText.includes("戻")) {
+        if (playlist.length === 0) {
+            return "プレイリストが空だから曲を戻せないよ。ファイルを選んでみてね！ [SELECT_FILES_TRIGGER]";
+        }
+        playPreviousTrack();
+        const currentTrack = playlist[currentTrackIndex];
+        return `前の曲「${currentTrack.name}」に戻したよ！`;
+    }
+    
+    if (normText.includes("プレイリスト") || normText.includes("曲リスト") || normText.includes("どんな曲") || normText.includes("リスト")) {
+        if (playlist.length === 0) {
+            return "今のプレイリストは空っぽだよ。ファイルを選択して読み込んでね！ [SELECT_FILES_TRIGGER]";
+        }
+        let listText = `現在のプレイリストには ${playlist.length} 曲が入っているよ！\n`;
+        const limit = Math.min(playlist.length, 5);
+        for (let i = 0; i < limit; i++) {
+            const isCurrent = i === currentTrackIndex ? " (再生中)" : "";
+            listText += `- ${i + 1}. ${playlist[i].name}${isCurrent}\n`;
+        }
+        if (playlist.length > limit) {
+            listText += `- ...他 ${playlist.length - limit} 曲`;
+        }
+        return listText;
+    }
+
     if (text.includes("こんにちは") || text.includes("はじめまして")) {
         return "ヤッホー先輩！今日の調子はどう？システムチェックとかパラメータ確認とか、いつでも何でも言ってねー！";
     }
