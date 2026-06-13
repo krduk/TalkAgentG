@@ -431,6 +431,22 @@ function appendElenaMessage(text, groundingMetadata = null) {
             }
         }
         
+        // Append file select button if triggered by agent
+        if (text.includes("[SELECT_FILES_TRIGGER]")) {
+            textContainer.innerHTML = textContainer.innerHTML.replace("[SELECT_FILES_TRIGGER]", "");
+            const btn = document.createElement('button');
+            btn.className = 'retro-btn';
+            btn.style.marginTop = '8px';
+            btn.style.display = 'block';
+            btn.textContent = '[ SELECT_FILES ]';
+            btn.addEventListener('click', () => {
+                const fileInput = document.getElementById('musicFileInput');
+                if (fileInput) fileInput.click();
+            });
+            messageDiv.querySelector('.msg-bubble').appendChild(btn);
+            scrollToBottom();
+        }
+
         // Show smiling expression on message completion temporarily
         if (config.agentColorMode !== 'default') {
             currentPortraitState = 'smile';
@@ -571,6 +587,10 @@ ${musicStatusText}
                 {
                     name: "music_get_playlist",
                     description: "Get the current list of songs loaded in the playlist."
+                },
+                {
+                    name: "music_request_file_select",
+                    description: "Ask the user to select local music files by showing a file picker button in the chat."
                 }
             ]
         }
@@ -668,6 +688,18 @@ ${musicStatusText}
                         const list = playlist.slice(0, 30).map((t, i) => ({ index: i + 1, name: t.name }));
                         result = { status: "success", playlist: list, total: playlist.length };
                     }
+                } else if (name === 'music_request_file_select') {
+                    result = { 
+                        status: "success", 
+                        message: "File selection requested. Please output the [SELECT_FILES_TRIGGER] token in your text response to display the button." 
+                    };
+                    try {
+                        const fileInput = document.getElementById('musicFileInput');
+                        if (fileInput) fileInput.click();
+                    } catch (e) {
+                        console.warn("Direct file click blocked, falling back to chat button:", e);
+                    }
+                    appendSystemMessage("LUNA: REQUESTED FILE SELECTION");
                 }
                 
                 toolResponseParts.push({
@@ -732,8 +764,8 @@ function speak(text) {
     
     window.speechSynthesis.cancel();
     
-    // Clean up markdown syntax and URLs for cleaner speech output
     let cleanText = text
+        .replace(/\[SELECT_FILES_TRIGGER\]/g, '') // Remove file select trigger token
         .replace(/[*#_~`>]/g, '') // Remove markdown formatting characters
         .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert markdown links to plain text
         .replace(/https?:\/\/\S+/g, 'URL') // Replace raw URLs with "URL"
@@ -1108,12 +1140,34 @@ function loadChatHistory() {
                         const txt = getMessageText(msg);
                         if (!txt) return; // Skip function calls
                         messageDiv.className = 'message character-msg';
+                        
+                        let cleanTxt = txt;
+                        let showBtn = false;
+                        if (cleanTxt.includes("[SELECT_FILES_TRIGGER]")) {
+                            cleanTxt = cleanTxt.replace("[SELECT_FILES_TRIGGER]", "");
+                            showBtn = true;
+                        }
+                        
                         messageDiv.innerHTML = `
                             <div class="msg-sender">[ LUNA ]</div>
                             <div class="msg-bubble">
-                                <div>${escapeHTML(txt)}</div>
+                                <div>${escapeHTML(cleanTxt)}</div>
                             </div>
                         `;
+                        
+                        if (showBtn) {
+                            const btn = document.createElement('button');
+                            btn.className = 'retro-btn';
+                            btn.style.marginTop = '8px';
+                            btn.style.display = 'block';
+                            btn.textContent = '[ SELECT_FILES ]';
+                            btn.addEventListener('click', () => {
+                                const fileInput = document.getElementById('musicFileInput');
+                                if (fileInput) fileInput.click();
+                            });
+                            messageDiv.querySelector('.msg-bubble').appendChild(btn);
+                        }
+                        
                         chatMessages.appendChild(messageDiv);
                     } else if (msg.role === 'system') {
                         messageDiv.className = 'message system-msg';
@@ -1718,7 +1772,7 @@ PLAY_MODE: ${playMode.toUpperCase()}
 1. あなた（ルナ）は「SOUND_BOARD.SYS」のコントロール権限（ツール）を持っています。
 2. ユーザーが「曲を流して」「次の曲にして」「止めて」と言ったら、対応するツールを呼び出して制御してください。
 3. ユーザーが「どんな曲がある？」と聞いたら、プレイリストの曲リストから選んで曲を提案したり、番号を指定して再生させることができます。
-4. ローカルフォルダが読み込まれていない場合は、「設定の下の[ LOAD_DIR ]や[ LOAD_FILES ]から音楽フォルダ/ファイルを読み込んでね！」とフレンドリーに案内してください。
+4. ユーザーが音楽ファイルの選択画面を開いてほしいとき、音楽フォルダやファイルを選択・追加したいと言ったとき、または「選択ボタンが見つからない」「選択ボタンがない」と言ったときは、必ず \`music_request_file_select\` ツールを実行し、さらにあなたのテキスト返答の文末等に \`[SELECT_FILES_TRIGGER]\` という文字列を含めて返答してください。このトークンはUI上でクリック可能なファイル選択用ボタンに変換されます。
 5. あなたが曲を再生した際は、その曲の雰囲気（タイトルやジャンル名などから推測）について楽しそうにコメントしたり、先輩（ユーザー）と一緒に音楽を楽しんでいるような会話をしてください。
 `;
     return statusText;
