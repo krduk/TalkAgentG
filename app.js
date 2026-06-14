@@ -2837,7 +2837,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.13';
+    const v = '?v=2.14';
     
     // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
     if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
@@ -2880,6 +2880,158 @@ function updatePortraitUI() {
 // ==========================================
 // BASEBALL MODE REAL-TIME CONTROL LOGIC
 // ==========================================
+
+async function fetchWithProxyFallback(targetUrl) {
+    const proxies = [
+        url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+        url => `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(url)}`
+    ];
+    
+    let lastError = null;
+    for (const proxyFn of proxies) {
+        try {
+            const proxyUrl = proxyFn(targetUrl);
+            const res = await fetch(proxyUrl);
+            if (res.ok) {
+                return await res.text();
+            }
+            throw new Error(`Proxy status ${res.status}`);
+        } catch (err) {
+            console.warn(`Proxy failed:`, err);
+            lastError = err;
+        }
+    }
+    throw lastError || new Error("All CORS proxies failed");
+}
+
+async function fetchBaseballData(isManual = false) {
+    baseballCountdown = 30;
+    const timerText = document.getElementById('baseballUpdateTimer');
+    if (timerText) timerText.textContent = isManual ? "LOADING..." : `UPDATE IN ${baseballCountdown}s`;
+
+    try {
+        const cacheBuster = `?_ts=${Date.now()}`;
+        // 阪神タイガースの本当のチームID「5」に修正
+        const targetUrl = 'https://baseball.yahoo.co.jp/npb/teams/5/top' + cacheBuster;
+        
+        const html = await fetchWithProxyFallback(targetUrl);
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        const domData = parseYahooTopPageDOM(doc);
+        
+        let gameDetailUrl = null;
+        const scoreItems = doc.querySelectorAll('.bb-scoreList__item');
+        scoreItems.forEach(item => {
+            if (item.textContent.includes('阪神')) {
+                const linkEl = item.querySelector('a');
+                if (linkEl) {
+                    const href = linkEl.getAttribute('href');
+                    if (href) {
+                        if (href.startsWith('/')) {
+                            gameDetailUrl = 'https://baseball.yahoo.co.jp' + href;
+                        } else if (href.startsWith('http')) {
+                            gameDetailUrl = href;
+                        }
+                    }
+                }
+            }
+        });
+        
+        if (config.apiKey && gameDetailUrl && domData && domData.playing) {
+            try {
+                const detailUrlWithBuster = gameDetailUrl + (gameDetailUrl.includes('?') ? '&' : '?') + `_ts=${Date.now()}`;
+                const detailHtml = await fetchWithProxyFallback(detailUrlWithBuster);
+                const detailDoc = parser.parseFromString(detailHtml, 'text/html');
+                detailDoc.querySelectorAll('script, style, iframe, header, footer, nav, noscript').forEach(el => el.remove());
+                const analysisText = detailDoc.body.innerText.slice(0, 3000);
+                
+                const prompt = `以下のテキスト（Yahoo!スポーツのプロ野球速報ページ）を分析し、本日の阪神タイガースの試合状況を抽出して、必ず指定のJSONオブジェクト1つだけを返してください。前後の説明やマークダウンタグ(\`\`\`)は一切含めないでください。
+本日に阪神戦が開催されていない、または試合時間外の場合は \`playing\` を false にし、lastPlay部分に試合予定や結果概要を記述してください。
+
+【出力JSON構造】
+{
+  "playing": true(試合中)またはfalse(試合前・終了後・試合なし),
+  "opponent": "対戦相手のチーム名 (例: 巨人, 広島, DeNA 等)",
+  "score": {"hanshin": 阪神の得点(数値), "opponent": 相手の得点(数値)},
+  "inning": "現在のイニング数字 (例: 8, 9)",
+  "bottom": true(裏・阪神の攻撃)かfalse(表・相手の攻撃),
+  "balls": 現在のボールカウント(0〜3),
+  "strikes": 現在のストライクカウント(0〜2),
+  "outs": 現在のアウトカウント(0〜2),
+  "runners": [1塁走者の有無(true/false), 2塁走者の有無(true/false), 3塁走者の有無(true/false)],
+  "pitcher": "現在の投手名 (例: 才木, 菅野 等)",
+  "batter": "現在の打者名 (例: 近本, 岡本 等)",
+  "lastPlay": "直近のプレー詳細テキスト。試合前の場合は試合開始予定時刻や予告先発、試合終了後の場合は結果概要と勝敗・セーブ投手情報など",
+  "inningScores": {
+    "opponent": [1〜9回の相手の得点。まだ達していない回は空文字列 \"\" とする。9要素の配列],
+    "hanshin": [1〜9回の阪神の得点。同様に9要素の配列]
+  }
+}
+
+【Yahoo!スポーツ テキストデータ (ソース: ${gameDetailUrl})】
+${analysisText}`;
+
+                const modelName = 'gemini-2.5-flash';
+                const apiRequestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${config.apiKey}`;
+                
+                const payload = {
+                    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.1,
+                        responseMimeType: "application/json"
+                    }
+                };
+                
+                const apiRes = await fetch(apiRequestUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (apiRes.ok) {
+                    const apiData = await apiRes.json();
+                    let resultText = apiData.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (resultText) {
+                        resultText = resultText.trim();
+                        if (resultText.startsWith("```")) {
+                            resultText = resultText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+                        }
+                        const parsed = JSON.parse(resultText);
+                        renderBaseballUI(parsed);
+                        return;
+                    }
+                }
+            } catch (detailErr) {
+                console.warn("Gemini parsing failed, using DOM parser:", detailErr);
+            }
+        }
+        
+        if (domData) {
+            renderBaseballUI(domData);
+        } else {
+            throw new Error("Failed to parse DOM");
+        }
+    } catch (err) {
+        console.error("fetchBaseballData failed:", err);
+        renderBaseballUI({
+            playing: false,
+            opponent: "通信エラー",
+            score: { hanshin: 0, opponent: 0 },
+            inning: 1,
+            bottom: false,
+            balls: 0, strikes: 0, outs: 0,
+            runners: [false, false, false],
+            pitcher: "-", batter: "-",
+            lastPlay: "データの取得に失敗しました。REFRESHを押してください。",
+            inningScores: {
+                opponent: Array(9).fill("-"),
+                hanshin: Array(9).fill("-")
+            }
+        });
+    }
+}
 
 function enableBaseballMode() {
     // Show cap putting-on animation for 0.8s
