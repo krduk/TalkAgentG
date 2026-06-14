@@ -1375,30 +1375,73 @@ input[type="checkbox"]:checked + .switch-slider::after {
 /* Mobile & Tablet adjustments for Baseball Mode */
 @media (max-width: 900px) {
     .portrait-section.baseball-active {
-        height: auto;
-        flex-direction: column;
-        max-width: 100%;
-        flex: 0 0 auto;
-        border: 4px double var(--retro-cyan);
+        height: 220px !important;
+        flex-direction: row !important;
+        max-width: 100% !important;
+        flex: 0 0 auto !important;
+        border: 4px double var(--retro-cyan) !important;
     }
     .portrait-section.baseball-active .portrait-container {
-        width: 100%;
-        height: 120px;
-        aspect-ratio: auto;
-        border-bottom: 4px double var(--retro-cyan);
-        border-right: none;
+        width: 90px !important;
+        height: 100% !important;
+        flex: 0 0 90px !important;
+        border-bottom: none !important;
+        border-right: 4px double var(--retro-cyan) !important;
+        aspect-ratio: auto !important;
     }
     .portrait-section.baseball-active #baseballPanel {
-        flex: none;
-        height: auto;
-        padding: 10px 12px;
-        gap: 8px;
+        flex: 1 !important;
+        height: 100% !important;
+        padding: 6px 10px !important;
+        gap: 4px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+    }
+    .portrait-section.baseball-active #baseballPanel .window-title-bar {
+        display: none !important;
+    }
+    .portrait-section.baseball-active .scoreboard {
+        margin-bottom: 2px !important;
     }
     .portrait-section.baseball-active .scoreboard-table {
-        font-size: 0.75rem;
+        font-size: 0.62rem !important;
+    }
+    .portrait-section.baseball-active .scoreboard-table th,
+    .portrait-section.baseball-active .scoreboard-table td {
+        padding: 1px 0px !important;
+    }
+    .portrait-section.baseball-active .game-detail-grid {
+        padding: 2px 4px !important;
+        margin-bottom: 2px !important;
+        gap: 4px !important;
+    }
+    .portrait-section.baseball-active .inning-display {
+        font-size: 0.7rem !important;
+    }
+    .portrait-section.baseball-active .bsos-display {
+        font-size: 0.65rem !important;
+        gap: 0px !important;
+    }
+    .portrait-section.baseball-active .bso-row {
+        gap: 2px !important;
     }
     .portrait-section.baseball-active .runners-diamond {
-        width: 64px;
-        height: 64px;
+        width: 48px !important;
+        height: 48px !important;
+    }
+    .portrait-section.baseball-active .player-matchup {
+        font-size: 0.65rem !important;
+        padding: 2px 4px !important;
+        margin-bottom: 2px !important;
+    }
+    .portrait-section.baseball-active .last-play-box {
+        padding: 3px 6px !important;
+        min-height: 32px !important;
+        font-size: 0.65rem !important;
+        margin-bottom: 2px !important;
+    }
+    .portrait-section.baseball-active .baseball-footer {
+        font-size: 0.62rem !important;
     }
 }
