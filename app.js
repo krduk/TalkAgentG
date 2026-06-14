@@ -92,7 +92,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.07] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.17] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -109,7 +109,16 @@ async function init() {
     initMusicPlayer();
     preloadMusicPortraits();
     await restorePlayerState();
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.07] Ready.");
+    
+    // Restore Baseball Mode State
+    const savedBaseballMode = localStorage.getItem('cosmos_elena_baseball_mode');
+    if (savedBaseballMode === 'true') {
+        enableBaseballMode(true);
+    } else {
+        disableBaseballMode(true);
+    }
+    
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.17] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -1496,11 +1505,11 @@ ${musicStatusText}
                 } else if (name === 'baseball_set_mode') {
                     const enabled = args.enabled;
                     if (enabled) {
-                        enableBaseballMode();
+                        enableBaseballMode(true);
                         result = { status: "success", message: "Baseball mode enabled. Hanshin Tigers real-time score tracker is now active. Luna is now wearing a baseball cap." };
                         appendSystemMessage("LUNA: ENABLED BASEBALL MODE");
                     } else {
-                        disableBaseballMode();
+                        disableBaseballMode(true);
                         result = { status: "success", message: "Baseball mode disabled. Returned to music player mode. Luna took off the baseball cap." };
                         appendSystemMessage("LUNA: DISABLED BASEBALL MODE");
                     }
@@ -2837,7 +2846,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.16';
+    const v = '?v=2.17';
     
     // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
     if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
@@ -3045,10 +3054,11 @@ ${analysisText}`;
     }
 }
 
-function enableBaseballMode() {
+function enableBaseballMode(isFromTool = false) {
     // Show cap putting-on animation for 0.8s
     isPuttingBaseballCap = true;
     isBaseballMode = true;
+    localStorage.setItem('cosmos_elena_baseball_mode', 'true');
     
     // Switch UI panels
     const musicPanel = document.getElementById('musicPlayerPanel');
@@ -3071,10 +3081,16 @@ function enableBaseballMode() {
     
     // Start interval
     startBaseballTimer();
+    
+    // UIからの手動切り替えの場合のみ、Geminiと状態を同期させるためにチャット履歴にシステムメッセージを追加
+    if (!isFromTool) {
+        appendSystemMessage("LUNA: ENABLED BASEBALL MODE");
+    }
 }
 
-function disableBaseballMode() {
+function disableBaseballMode(isFromTool = false) {
     isBaseballMode = false;
+    localStorage.setItem('cosmos_elena_baseball_mode', 'false');
     
     // Switch UI panels
     const musicPanel = document.getElementById('musicPlayerPanel');
@@ -3089,6 +3105,11 @@ function disableBaseballMode() {
     
     // Stop intervals
     stopBaseballTimer();
+    
+    // UIからの手動切り替えの場合のみ、Geminiと状態を同期させるためにチャット履歴にシステムメッセージを追加
+    if (!isFromTool) {
+        appendSystemMessage("LUNA: DISABLED BASEBALL MODE");
+    }
 }
 
 function startBaseballTimer() {
