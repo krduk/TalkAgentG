@@ -2837,7 +2837,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.14';
+    const v = '?v=2.15';
     
     // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
     if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
@@ -2883,20 +2883,32 @@ function updatePortraitUI() {
 
 async function fetchWithProxyFallback(targetUrl) {
     const proxies = [
-        url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        url => `https://api.codetabs.com/v1/proxy?url=${encodeURIComponent(url)}`
+        // 1. AllOrigins JSON API (highly reliable, returns HTML in .contents)
+        async (url) => {
+            const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+            if (!res.ok) throw new Error(`AllOrigins JSON returned status ${res.status}`);
+            const json = await res.json();
+            if (!json.contents) throw new Error("AllOrigins response does not contain contents");
+            return json.contents;
+        },
+        // 2. CORSProxy.io
+        async (url) => {
+            const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+            if (!res.ok) throw new Error(`CORSProxy.io returned status ${res.status}`);
+            return await res.text();
+        },
+        // 3. CodeTabs (corrected query parameter to 'quest')
+        async (url) => {
+            const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
+            if (!res.ok) throw new Error(`CodeTabs returned status ${res.status}`);
+            return await res.text();
+        }
     ];
     
     let lastError = null;
     for (const proxyFn of proxies) {
         try {
-            const proxyUrl = proxyFn(targetUrl);
-            const res = await fetch(proxyUrl);
-            if (res.ok) {
-                return await res.text();
-            }
-            throw new Error(`Proxy status ${res.status}`);
+            return await proxyFn(targetUrl);
         } catch (err) {
             console.warn(`Proxy failed:`, err);
             lastError = err;
