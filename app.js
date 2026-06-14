@@ -47,6 +47,7 @@ let musicAudio = null;
 // Baseball Mode State
 let isBaseballMode = false;
 let isPuttingBaseballCap = false;
+let isRemovingBaseballCap = false;
 let baseballTimer = null;
 let baseballCountdown = 30;
 let baseballCountdownInterval = null;
@@ -92,7 +93,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.18] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.19] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -118,7 +119,7 @@ async function init() {
         disableBaseballMode(true);
     }
     
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.18] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.19] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -127,7 +128,9 @@ function preloadMusicPortraits() {
         'assets/elena_mono_put_headphones.jpg' + v,
         'assets/elena_mono_low_headphones.jpg' + v,
         'assets/elena_mono_talk_headphones.jpg' + v,
-        'assets/elena_mono_low_open_eyes_headphones.jpg' + v
+        'assets/elena_mono_low_open_eyes_headphones.jpg' + v,
+        'assets/elena_mono_baseball.jpg' + v,
+        'assets/elena_mono_put_cap.jpg' + v
     ];
     imagesToPreload.forEach(src => {
         const img = new Image();
@@ -2846,10 +2849,16 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.18';
+    const v = '?v=2.19';
     
-    // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
-    if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
+    // 帽子をかぶる動作中、または帽子を脱ぐ動作中
+    if (isPuttingBaseballCap || isRemovingBaseballCap) {
+        portrait.src = 'assets/elena_mono_put_cap.jpg' + v;
+        return;
+    }
+    
+    // ヘッドホン着脱のアニメーション中
+    if (isPuttingHeadphones || isRemovingHeadphones) {
         portrait.src = 'assets/elena_mono_put_headphones.jpg' + v;
         return;
     }
@@ -2977,7 +2986,8 @@ async function fetchBaseballData(isManual = false) {
   "opponent": "対戦相手のチーム名 (例: 巨人, 広島, DeNA 等)",
   "score": {"hanshin": 阪神の得点(数値), "opponent": 相手の得点(数値)},
   "inning": "現在のイニング数字 (例: 8, 9)",
-  "bottom": true(裏・阪神の攻撃)かfalse(表・相手の攻撃),
+  "bottom": true(現在が裏のイニング)かfalse(現在が表のイニング)の論理値,
+  "hanshinOffense": true(現在が阪神の攻撃中)かfalse(現在が対戦相手の攻撃中)の論理値,
   "balls": 現在のボールカウント(0〜3),
   "strikes": 現在のストライクカウント(0〜2),
   "outs": 現在のアウトカウント(0〜2),
@@ -3042,6 +3052,7 @@ ${analysisText}`;
             score: { hanshin: 0, opponent: 0 },
             inning: 1,
             bottom: false,
+            hanshinOffense: false,
             balls: 0, strikes: 0, outs: 0,
             runners: [false, false, false],
             pitcher: "-", batter: "-",
@@ -3092,6 +3103,15 @@ function disableBaseballMode(isFromTool = false) {
     isBaseballMode = false;
     localStorage.setItem('cosmos_elena_baseball_mode', 'false');
     
+    // 帽子を脱ぐ動作のアニメーション（0.8秒）を挟む
+    isRemovingBaseballCap = true;
+    updatePortraitUI();
+    
+    setTimeout(() => {
+        isRemovingBaseballCap = false;
+        updatePortraitUI();
+    }, 800);
+    
     // Switch UI panels
     const musicPanel = document.getElementById('musicPlayerPanel');
     const baseballPanel = document.getElementById('baseballPanel');
@@ -3099,9 +3119,6 @@ function disableBaseballMode(isFromTool = false) {
     if (musicPanel) musicPanel.style.display = 'flex';
     if (baseballPanel) baseballPanel.style.display = 'none';
     if (portraitSection) portraitSection.classList.remove('baseball-active');
-    
-    // Update portrait (Luna takes off the cap)
-    updatePortraitUI();
     
     // Stop intervals
     stopBaseballTimer();
@@ -3204,7 +3221,20 @@ function parseYahooTopPageDOM(doc) {
     
     const activeScores = hanshinData.scores.filter(s => s !== "" && s !== "-" && s !== " ");
     const currentInning = Math.max(1, activeScores.length);
-    const bottom = !isRow1Hanshin;
+    
+    // 現在、先攻（上の行）と後攻（下の行）のどちらが攻撃中か判定
+    const isRow1Active = rows[0].querySelector('.bb-gameScoreTable__data--now') !== null;
+    const isRow2Active = rows[1].querySelector('.bb-gameScoreTable__data--now') !== null;
+    
+    let isNowBottom = false;
+    if (isRow2Active) {
+        isNowBottom = true;
+    } else if (!isRow1Active && !isRow2Active) {
+        isNowBottom = false; // デフォルトで表
+    }
+    
+    // 現在、阪神が攻撃中であるか
+    const isHanshinOffense = (isRow1Hanshin && !isNowBottom) || (!isRow1Hanshin && isNowBottom);
     
     const fillInningsArray = (scores) => {
         const arr = Array(9).fill("-");
@@ -3224,7 +3254,8 @@ function parseYahooTopPageDOM(doc) {
             opponent: opponentData.runs
         },
         inning: currentInning,
-        bottom: bottom,
+        bottom: isNowBottom,
+        hanshinOffense: isHanshinOffense,
         balls: 0, strikes: 0, outs: 0,
         runners: [false, false, false],
         pitcher: "-",
@@ -3261,6 +3292,7 @@ function parseYahooPreGameDOM(doc) {
         score: { hanshin: 0, opponent: 0 },
         inning: 1,
         bottom: false,
+        hanshinOffense: false,
         balls: 0, strikes: 0, outs: 0,
         runners: [false, false, false],
         pitcher: "-",
@@ -3286,8 +3318,9 @@ function renderBaseballUI(data) {
     const inningDisplay = document.getElementById('inningDisplay');
     if (inningDisplay) {
         if (data.playing) {
-            const half = data.bottom ? "裏 阪神の攻撃" : "表 の攻撃";
-            inningDisplay.textContent = `> ${data.inning}回${data.bottom ? "裏 阪神の攻撃" : "表 " + oppName + "の攻撃"}`;
+            const inningStr = `${data.inning}回${data.bottom ? "裏" : "表"}`;
+            const offenseStr = data.hanshinOffense ? "阪神の攻撃" : `${oppName}の攻撃`;
+            inningDisplay.textContent = `> ${inningStr} ${offenseStr}`;
         } else {
             inningDisplay.textContent = "> 試合終了 または 時間外";
         }
