@@ -1304,144 +1304,114 @@ input[type="checkbox"]:checked + .switch-slider::after {
 }
 
 /* ==========================================
-   BASEBALL RESPONSIVE & LAYOUT OPTIMIZATIONS
+   BASEBALL RESPONSIVE, TABS & LAYOUTS
    ========================================== */
 
-/* Low height screen adjustments for desktop to prevent overflow */
-@media (max-height: 800px) and (min-width: 901px) {
-    .portrait-section {
-        max-width: 230px;
-    }
-    #baseballPanel {
-        gap: 3px;
-        padding: 6px 10px;
-    }
-    .scoreboard-table {
-        font-size: 0.65rem;
-    }
-    .game-detail-grid {
-        padding: 2px 4px;
-        margin-bottom: 2px;
-    }
-    .runners-diamond {
-        width: 56px;
-        height: 56px;
-    }
-    .player-matchup {
-        padding: 2px 6px;
-        margin-bottom: 2px;
-        font-size: 0.68rem;
-    }
-    .last-play-box {
-        padding: 3px 6px;
-        min-height: 28px;
-        font-size: 0.68rem;
-        margin-bottom: 2px;
-    }
+.baseball-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+    width: 100%;
 }
 
-@media (max-height: 700px) and (min-width: 901px) {
-    .portrait-section {
-        max-width: 190px;
-    }
-    #baseballPanel {
-        gap: 2px;
-        padding: 4px 8px;
-    }
-    .scoreboard-table {
-        font-size: 0.6rem;
-    }
-    .game-detail-grid {
-        padding: 1px 3px;
-        margin-bottom: 1px;
-    }
-    .runners-diamond {
-        width: 48px;
-        height: 48px;
-    }
-    .player-matchup {
-        padding: 1px 5px;
-        margin-bottom: 1px;
-        font-size: 0.65rem;
-    }
-    .last-play-box {
-        padding: 2px 5px;
-        min-height: 24px;
-        font-size: 0.65rem;
-        margin-bottom: 1px;
-    }
+.baseball-tabs .tab-btn {
+    flex: 1;
+    padding: 2px 4px;
+    font-size: 0.72rem;
+    text-align: center;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid var(--retro-green);
+    color: var(--retro-green);
 }
 
-/* Mobile & Tablet adjustments for Baseball Mode */
+.baseball-tabs .tab-btn.active {
+    background-color: var(--retro-cyan) !important;
+    color: var(--retro-blue) !important;
+    border-color: var(--retro-cyan) !important;
+}
+
+.baseball-tab-content {
+    width: 100%;
+    min-height: 0;
+}
+
+/* Redefine Game Detail Grid for layout efficiency inside Tab 2 */
+#baseballDetailTab .game-detail-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 6px;
+    border: 1px solid rgba(51, 255, 51, 0.2);
+    background: rgba(0, 0, 0, 0.2);
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
+#baseballDetailTab .game-info-col {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+}
+
+#baseballDetailTab .player-matchup {
+    font-size: 0.65rem;
+    padding: 3px 5px;
+    background: rgba(0, 0, 0, 0.3);
+    color: var(--retro-green);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    border-left: 1px dashed rgba(51, 255, 51, 0.2);
+    align-items: flex-start;
+    flex: 0 0 auto;
+}
+
+#baseballDetailTab .player-matchup div {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 75px;
+}
+
+/* Mobile adjustments (width <= 900px) for baseball mode */
 @media (max-width: 900px) {
+    /* モバイル時も高さを130pxのままにし、縦に伸びてチャットを潰すのを完全に防ぐ */
     .portrait-section.baseball-active {
-        height: 220px !important;
+        height: 130px !important;
         flex-direction: row !important;
-        max-width: 100% !important;
-        flex: 0 0 auto !important;
-        border: 4px double var(--retro-cyan) !important;
     }
+    
     .portrait-section.baseball-active .portrait-container {
-        width: 90px !important;
-        height: 100% !important;
-        flex: 0 0 90px !important;
+        width: 126px !important;
+        height: 126px !important;
+        flex: 0 0 126px !important;
         border-bottom: none !important;
         border-right: 4px double var(--retro-cyan) !important;
-        aspect-ratio: auto !important;
     }
+    
     .portrait-section.baseball-active #baseballPanel {
-        flex: 1 !important;
-        height: 100% !important;
         padding: 6px 10px !important;
         gap: 4px !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: space-between !important;
     }
-    .portrait-section.baseball-active #baseballPanel .window-title-bar {
-        display: none !important;
-    }
-    .portrait-section.baseball-active .scoreboard {
-        margin-bottom: 2px !important;
-    }
+    
     .portrait-section.baseball-active .scoreboard-table {
         font-size: 0.62rem !important;
     }
-    .portrait-section.baseball-active .scoreboard-table th,
-    .portrait-section.baseball-active .scoreboard-table td {
-        padding: 1px 0px !important;
-    }
-    .portrait-section.baseball-active .game-detail-grid {
+    
+    .portrait-section.baseball-active #baseballDetailTab .game-detail-grid {
         padding: 2px 4px !important;
-        margin-bottom: 2px !important;
         gap: 4px !important;
     }
-    .portrait-section.baseball-active .inning-display {
-        font-size: 0.7rem !important;
+    
+    .portrait-section.baseball-active #baseballDetailTab .player-matchup {
+        padding-left: 4px !important;
+        font-size: 0.6rem !important;
     }
-    .portrait-section.baseball-active .bsos-display {
-        font-size: 0.65rem !important;
-        gap: 0px !important;
-    }
-    .portrait-section.baseball-active .bso-row {
-        gap: 2px !important;
-    }
+    
     .portrait-section.baseball-active .runners-diamond {
         width: 48px !important;
         height: 48px !important;
-    }
-    .portrait-section.baseball-active .player-matchup {
-        font-size: 0.65rem !important;
-        padding: 2px 4px !important;
-        margin-bottom: 2px !important;
-    }
-    .portrait-section.baseball-active .last-play-box {
-        padding: 3px 6px !important;
-        min-height: 32px !important;
-        font-size: 0.65rem !important;
-        margin-bottom: 2px !important;
-    }
-    .portrait-section.baseball-active .baseball-footer {
-        font-size: 0.62rem !important;
     }
 }

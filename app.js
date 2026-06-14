@@ -613,6 +613,27 @@ function setupEventListeners() {
     if (switchToBaseballBtn) switchToBaseballBtn.addEventListener('click', enableBaseballMode);
     if (baseballBackBtn) baseballBackBtn.addEventListener('click', disableBaseballMode);
     if (baseballRefreshBtn) baseballRefreshBtn.addEventListener('click', () => fetchBaseballData(true));
+
+    // Baseball Mode Tabs
+    const tabScoreBtn = document.getElementById('tabScoreBtn');
+    const tabDetailBtn = document.getElementById('tabDetailBtn');
+    const baseballScoreTab = document.getElementById('baseballScoreTab');
+    const baseballDetailTab = document.getElementById('baseballDetailTab');
+    
+    if (tabScoreBtn && tabDetailBtn && baseballScoreTab && baseballDetailTab) {
+        tabScoreBtn.addEventListener('click', () => {
+            tabScoreBtn.classList.add('active');
+            tabDetailBtn.classList.remove('active');
+            baseballScoreTab.style.display = 'block';
+            baseballDetailTab.style.display = 'none';
+        });
+        tabDetailBtn.addEventListener('click', () => {
+            tabDetailBtn.classList.add('active');
+            tabScoreBtn.classList.remove('active');
+            baseballScoreTab.style.display = 'none';
+            baseballDetailTab.style.display = 'block';
+        });
+    }
 }
 
 // Modal actions
@@ -2817,7 +2838,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.09';
+    const v = '?v=2.10';
     
     // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
     if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
@@ -3308,9 +3329,16 @@ function renderBaseballUI(data) {
     if (pitcherEl) pitcherEl.textContent = data.pitcher || "-";
     if (batterEl) batterEl.textContent = data.batter || "-";
     
-    // Render Last Play
-    const lastPlayEl = document.getElementById('lastPlayText');
-    if (lastPlayEl) lastPlayEl.textContent = data.lastPlay || "実況待機中...";
+    // Speak Last Play in Chat
+    if (data.lastPlay && data.lastPlay !== "実況待機中..." && data.lastPlay !== "速報データを待機中...") {
+        if (typeof window.lastSpokenPlay === 'undefined') {
+            window.lastSpokenPlay = "";
+        }
+        if (data.lastPlay !== window.lastSpokenPlay) {
+            window.lastSpokenPlay = data.lastPlay;
+            appendElenaMessage(`【一球速報】${data.lastPlay}`);
+        }
+    }
     
     // Render BSO Counts
     updateBSODots('ballCount', data.balls || 0, 3);
