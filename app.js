@@ -51,7 +51,6 @@ let baseballTimer = null;
 let baseballCountdown = 30;
 let baseballCountdownInterval = null;
 let baseballData = null;
-let mockBaseballState = null;
 let musicSource = null;
 let musicAnalyser = null;
 let musicGainNode = null;
@@ -2838,7 +2837,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.11';
+    const v = '?v=2.12';
     
     // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
     if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
@@ -2953,81 +2952,195 @@ function stopBaseballTimer() {
     }
 }
 
+function parseYahooTopPageDOM(doc) {
+    const table = doc.getElementById('ing_brd');
+    if (!table) {
+        return parseYahooPreGameDOM(doc);
+    }
+    
+    const rows = table.querySelectorAll('.bb-gameScoreTable__row');
+    if (rows.length < 2) return null;
+    
+    const headers = [];
+    table.querySelectorAll('thead th').forEach(th => {
+        headers.push(th.textContent.trim());
+    });
+    
+    const parseRow = (row) => {
+        const teamEl = row.querySelector('.bb-gameScoreTable__team');
+        const teamName = teamEl ? teamEl.textContent.trim() : "対戦相手";
+        
+        const scores = [];
+        let runs = 0, hits = 0, errors = 0;
+        
+        const cells = row.querySelectorAll('.bb-gameScoreTable__data');
+        for (let i = 1; i < cells.length; i++) {
+            const cell = cells[i];
+            const header = headers[i];
+            if (!header) continue;
+            
+            const val = cell.textContent.trim();
+            if (header === "計") {
+                runs = parseInt(val) || 0;
+            } else if (header === "安") {
+                hits = parseInt(val) || 0;
+            } else if (header === "失") {
+                errors = parseInt(val) || 0;
+            } else {
+                scores.push(val === "" ? "-" : val);
+            }
+        }
+        
+        return { teamName, scores, runs, hits, errors };
+    };
+    
+    const row1 = parseRow(rows[0]);
+    const row2 = parseRow(rows[1]);
+    
+    const isRow1Hanshin = row1.teamName.includes('阪神');
+    const hanshinData = isRow1Hanshin ? row1 : row2;
+    const opponentData = isRow1Hanshin ? row2 : row1;
+    
+    let statusText = "試合中";
+    const statusEl = doc.querySelector('.bb-gameScoreTable__status');
+    if (statusEl) {
+        statusText = statusEl.textContent.trim();
+    } else {
+        const titleEl = doc.querySelector('.bb-head01__title');
+        if (titleEl) {
+            const text = titleEl.textContent.trim();
+            if (text.includes('試合終了')) statusText = "試合終了";
+            else if (text.includes('中止')) statusText = "試合中止";
+            else if (text.includes('回')) statusText = "試合中";
+        }
+    }
+    
+    const isPlaying = statusText.includes('試合中') || (!statusText.includes('試合前') && !statusText.includes('試合終了') && !statusText.includes('中止'));
+    
+    const activeScores = hanshinData.scores.filter(s => s !== "" && s !== "-" && s !== " ");
+    const currentInning = Math.max(1, activeScores.length);
+    const bottom = !isRow1Hanshin;
+    
+    const fillInningsArray = (scores) => {
+        const arr = Array(9).fill("-");
+        for (let i = 0; i < 9; i++) {
+            if (scores[i] !== undefined && scores[i] !== "") {
+                arr[i] = scores[i];
+            }
+        }
+        return arr;
+    };
+    
+    return {
+        playing: isPlaying,
+        opponent: opponentData.teamName,
+        score: {
+            hanshin: hanshinData.runs,
+            opponent: opponentData.runs
+        },
+        inning: currentInning,
+        bottom: bottom,
+        balls: 0, strikes: 0, outs: 0,
+        runners: [false, false, false],
+        pitcher: "-",
+        batter: "-",
+        lastPlay: isPlaying ? `試合進行中 (${currentInning}回)` : statusText,
+        inningScores: {
+            hanshin: fillInningsArray(hanshinData.scores),
+            opponent: fillInningsArray(opponentData.scores)
+        }
+    };
+}
+
+function parseYahooPreGameDOM(doc) {
+    let opponentName = "対戦相手";
+    let gameTimeText = "試合前";
+    let isTodayGame = false;
+    
+    const scoreItems = doc.querySelectorAll('.bb-scoreList__item');
+    scoreItems.forEach(item => {
+        if (item.textContent.includes('阪神')) {
+            isTodayGame = true;
+            item.querySelectorAll('.bb-scoreList__teamName, .bb-scoreList__team a').forEach(el => {
+                const name = el.textContent.trim();
+                if (name && name !== "阪神") opponentName = name;
+            });
+            const stateEl = item.querySelector('.bb-scoreList__state');
+            if (stateEl) gameTimeText = stateEl.textContent.trim();
+        }
+    });
+    
+    return {
+        playing: false,
+        opponent: opponentName,
+        score: { hanshin: 0, opponent: 0 },
+        inning: 1,
+        bottom: false,
+        balls: 0, strikes: 0, outs: 0,
+        runners: [false, false, false],
+        pitcher: "-",
+        batter: "-",
+        lastPlay: isTodayGame ? `本日試合予定: ${gameTimeText}` : "本日の試合はありません",
+        inningScores: {
+            opponent: Array(9).fill("-"),
+            hanshin: Array(9).fill("-")
+        }
+    };
+}
+
 async function fetchBaseballData(isManual = false) {
-    // Reset countdown if updating
     baseballCountdown = 30;
     const timerText = document.getElementById('baseballUpdateTimer');
     if (timerText) timerText.textContent = isManual ? "LOADING..." : `UPDATE IN ${baseballCountdown}s`;
 
-    if (config.mode === 'mock' || !config.apiKey) {
-        // Mock Mode Update
-        updateBaseballMockData();
-        renderBaseballUI(mockBaseballState);
-    } else {
-        // Scraper Mode Update (CORS proxy fetch + Gemini Text Extraction)
-        try {
-            const targetUrl = 'https://baseball.yahoo.co.jp/npb/teams/11/top';
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-            
-            const res = await fetch(proxyUrl);
-            if (!res.ok) throw new Error("CORS Proxy fetch failed");
-            
-            const html = await res.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            
-            // Remove scripts/styles to reduce token sizes
-            doc.querySelectorAll('script, style, iframe, header, footer, nav, noscript').forEach(el => el.remove());
-            
-            let gameHtml = '';
-            let gameDetailUrl = null;
-            
-            // Find the scoreboard card that contains Hanshin Tigers (阪神)
-            const scoreItems = doc.querySelectorAll('.bb-scoreList__item');
-            scoreItems.forEach(item => {
-                if (item.textContent.includes('阪神')) {
-                    gameHtml = item.outerHTML;
-                    const linkEl = item.querySelector('a');
-                    if (linkEl) {
-                        const href = linkEl.getAttribute('href');
-                        if (href) {
-                            if (href.startsWith('/')) {
-                                gameDetailUrl = 'https://baseball.yahoo.co.jp' + href;
-                            } else if (href.startsWith('http')) {
-                                gameDetailUrl = href;
-                            }
+    try {
+        const targetUrl = 'https://baseball.yahoo.co.jp/npb/teams/11/top';
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+        
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error("CORS Proxy fetch failed");
+        
+        const html = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        const domData = parseYahooTopPageDOM(doc);
+        
+        let gameDetailUrl = null;
+        const scoreItems = doc.querySelectorAll('.bb-scoreList__item');
+        scoreItems.forEach(item => {
+            if (item.textContent.includes('阪神')) {
+                const linkEl = item.querySelector('a');
+                if (linkEl) {
+                    const href = linkEl.getAttribute('href');
+                    if (href) {
+                        if (href.startsWith('/')) {
+                            gameDetailUrl = 'https://baseball.yahoo.co.jp' + href;
+                        } else if (href.startsWith('http')) {
+                            gameDetailUrl = href;
                         }
                     }
                 }
-            });
-            
-            let analysisText = gameHtml || doc.body.innerText.slice(0, 2500);
-            let usedUrl = targetUrl;
-            
-            // If the game is starting/active/ended and there is a detailed game link, fetch it for BSO, batter/pitcher matchups and play reports
-            if (gameDetailUrl && !analysisText.includes('13:00') && !analysisText.includes('14:00') && !analysisText.includes('18:00')) {
-                try {
-                    const detailProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gameDetailUrl)}`;
-                    const detailRes = await fetch(detailProxyUrl);
-                    if (detailRes.ok) {
-                        const detailHtml = await detailRes.text();
-                        const detailDoc = parser.parseFromString(detailHtml, 'text/html');
-                        detailDoc.querySelectorAll('script, style, iframe, header, footer, nav, noscript').forEach(el => el.remove());
-                        analysisText = detailDoc.body.innerText.slice(0, 3000);
-                        usedUrl = gameDetailUrl;
-                    }
-                } catch (detailErr) {
-                    console.warn("Failed to scrape detailed matchup page, using top page summary instead:", detailErr);
-                }
             }
-            
-            const prompt = `以下のテキスト（Yahoo!スポーツのプロ野球速報ページ）を分析し、本日の阪神タイガースの試合状況を抽出して、必ず指定のJSONオブジェクト1つだけを返してください。前後の説明やマークダウンタグ(\`\`\`)は一切含めないでください。
+        });
+        
+        if (config.apiKey && gameDetailUrl && domData && domData.playing) {
+            try {
+                const detailProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gameDetailUrl)}`;
+                const detailRes = await fetch(detailProxyUrl);
+                if (detailRes.ok) {
+                    const detailHtml = await detailRes.text();
+                    const detailDoc = parser.parseFromString(detailHtml, 'text/html');
+                    detailDoc.querySelectorAll('script, style, iframe, header, footer, nav, noscript').forEach(el => el.remove());
+                    const analysisText = detailDoc.body.innerText.slice(0, 3000);
+                    
+                    const prompt = `以下のテキスト（Yahoo!スポーツのプロ野球速報ページ）を分析し、本日の阪神タイガースの試合状況を抽出して、必ず指定のJSONオブジェクト1つだけを返してください。前後の説明やマークダウンタグ(\`\`\`)は一切含めないでください。
 本日に阪神戦が開催されていない、または試合時間外の場合は \`playing\` を false にし、lastPlay部分に試合予定や結果概要を記述してください。
 
 【出力JSON構造】
 {
   "playing": true(試合中)またはfalse(試合前・終了後・試合なし),
-  "opponent": "対戦相手のチーム名 (例: 巨人, 広島, ヤクルト, DeNA, 中日 等)",
+  "opponent": "対戦相手のチーム名 (例: 巨人, 広島, DeNA 等)",
   "score": {"hanshin": 阪神の得点(数値), "opponent": 相手の得点(数値)},
   "inning": "現在のイニング数字 (例: 8, 9)",
   "bottom": true(裏・阪神の攻撃)かfalse(表・相手の攻撃),
@@ -3044,263 +3157,67 @@ async function fetchBaseballData(isManual = false) {
   }
 }
 
-【Yahoo!スポーツ テキストデータ (ソース: ${usedUrl})】
+【Yahoo!スポーツ テキストデータ (ソース: ${gameDetailUrl})】
 ${analysisText}`;
 
-            const modelName = 'gemini-3.1-flash-lite';
-            const apiRequestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${config.apiKey}`;
-            
-            const payload = {
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.1,
-                    responseMimeType: "application/json"
+                    const modelName = 'gemini-2.5-flash';
+                    const apiRequestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${config.apiKey}`;
+                    
+                    const payload = {
+                        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            temperature: 0.1,
+                            responseMimeType: "application/json"
+                        }
+                    };
+                    
+                    const apiRes = await fetch(apiRequestUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (apiRes.ok) {
+                        const apiData = await apiRes.json();
+                        let resultText = apiData.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (resultText) {
+                            resultText = resultText.trim();
+                            if (resultText.startsWith("```")) {
+                                resultText = resultText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+                            }
+                            const parsed = JSON.parse(resultText);
+                            renderBaseballUI(parsed);
+                            return;
+                        }
+                    }
                 }
-            };
-            
-            const apiRes = await fetch(apiRequestUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            
-            if (!apiRes.ok) throw new Error(`Gemini API returned status ${apiRes.status}`);
-            
-            const apiData = await apiRes.json();
-            let resultText = apiData.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!resultText) throw new Error("Empty Gemini response");
-            
-            resultText = resultText.trim();
-            if (resultText.startsWith("```")) {
-                resultText = resultText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+            } catch (detailErr) {
+                console.warn("Gemini parsing failed, using DOM parser:", detailErr);
             }
-            
-            const parsed = JSON.parse(resultText);
-            renderBaseballUI(parsed);
-        } catch (err) {
-            console.warn("Yahoo scraping + Gemini parsing failed, falling back to mock simulation:", err);
-            updateBaseballMockData();
-            renderBaseballUI(mockBaseballState);
         }
-    }
-}
-
-function updateBaseballMockData() {
-    const hanshinPlayers = ["近本", "中野", "森下", "大山", "佐藤輝", "前川", "梅野", "木浪", "才木"];
-    const opponentPlayers = ["丸", "吉川", "ヘルナンデス", "岡本和", "坂本", "大城", "門脇", "小林", "戸郷"];
-    
-    if (!mockBaseballState) {
-        mockBaseballState = {
-            playing: true,
-            opponent: "巨人",
+        
+        if (domData) {
+            renderBaseballUI(domData);
+        } else {
+            throw new Error("Failed to parse DOM");
+        }
+    } catch (err) {
+        console.error("fetchBaseballData failed:", err);
+        renderBaseballUI({
+            playing: false,
+            opponent: "通信エラー",
             score: { hanshin: 0, opponent: 0 },
             inning: 1,
-            bottom: false, // false = 1回表 (巨人), true = 1回裏 (阪神)
-            balls: 0,
-            strikes: 0,
-            outs: 0,
+            bottom: false,
+            balls: 0, strikes: 0, outs: 0,
             runners: [false, false, false],
-            pitcher: "才木", // 阪神の投手 (巨人の攻撃中)
-            batter: "丸",   // 巨人の打者
-            lastPlay: "プレイボール！試合開始です。",
+            pitcher: "-", batter: "-",
+            lastPlay: "データの取得に失敗しました。REFRESHを押してください。",
             inningScores: {
-                opponent: Array(9).fill(""),
-                hanshin: Array(9).fill("")
+                opponent: Array(9).fill("-"),
+                hanshin: Array(9).fill("-")
             }
-        };
-        mockBaseballState.inningScores.opponent[0] = 0;
-        return;
-    }
-    
-    // Simulate game state progression
-    // 60% chance of pitch count increment, 40% chance of dynamic play event
-    const rand = Math.random();
-    if (rand < 0.6) {
-        // Strike / Ball count progression
-        const pitch = Math.random();
-        if (pitch < 0.45) {
-            mockBaseballState.balls = Math.min(3, mockBaseballState.balls + 1);
-            mockBaseballState.lastPlay = `ボール！カウント ${mockBaseballState.balls}B-${mockBaseballState.strikes}S`;
-        } else if (pitch < 0.85) {
-            mockBaseballState.strikes = Math.min(2, mockBaseballState.strikes + 1);
-            mockBaseballState.lastPlay = `ストライク！カウント ${mockBaseballState.balls}B-${mockBaseballState.strikes}S`;
-        } else {
-            // Foul ball (only adds strike if strikes < 2)
-            if (mockBaseballState.strikes < 2) {
-                mockBaseballState.strikes++;
-            }
-            mockBaseballState.lastPlay = `ファウルボール。カウント ${mockBaseballState.balls}B-${mockBaseballState.strikes}S`;
-        }
-    } else {
-        // Action Play Event (At-bat resolution)
-        const play = Math.random();
-        const batterName = mockBaseballState.batter;
-        
-        if (play < 0.3) {
-            // Strikeout / Strikeout looking
-            mockBaseballState.outs++;
-            mockBaseballState.strikes = 0;
-            mockBaseballState.balls = 0;
-            mockBaseballState.lastPlay = `${batterName}、空振り三振！ ${mockBaseballState.outs}アウト。`;
-        } else if (play < 0.55) {
-            // Infield/Outfield Out
-            mockBaseballState.outs++;
-            mockBaseballState.strikes = 0;
-            mockBaseballState.balls = 0;
-            const outs = ["レフトフライ", "サードゴロ", "ファーストフライ", "セカンドフライ", "ショートゴロ", "センターフライ"];
-            const outType = outs[Math.floor(Math.random() * outs.length)];
-            mockBaseballState.lastPlay = `${batterName}は${outType}に倒れました。${mockBaseballState.outs}アウト。`;
-        } else if (play < 0.65) {
-            // Walk (Four balls)
-            mockBaseballState.strikes = 0;
-            mockBaseballState.balls = 0;
-            mockBaseballState.lastPlay = `${batterName}、フォアボールを選んで出塁。`;
-            advanceRunners(false);
-        } else if (play < 0.93) {
-            // Hit (Single/Double)
-            mockBaseballState.strikes = 0;
-            mockBaseballState.balls = 0;
-            const hitType = Math.random() < 0.85 ? "ヒット" : "ツーベースヒット";
-            const directions = ["レフト前", "ライト前", "センター前", "三遊間を抜ける", "一二塁間を破る", "右中間フェンス直撃の"];
-            const dir = directions[Math.floor(Math.random() * directions.length)];
-            
-            mockBaseballState.lastPlay = `${batterName}、${dir}${hitType}！`;
-            advanceRunners(true);
-        } else {
-            // Home run!
-            mockBaseballState.strikes = 0;
-            mockBaseballState.balls = 0;
-            let runsScored = 1; // Batter scores
-            mockBaseballState.runners.forEach(r => { if (r) runsScored++; });
-            
-            if (mockBaseballState.bottom) {
-                mockBaseballState.score.hanshin += runsScored;
-                const scoreIndex = mockBaseballState.inning - 1;
-                const currentScore = parseInt(mockBaseballState.inningScores.hanshin[scoreIndex]) || 0;
-                mockBaseballState.inningScores.hanshin[scoreIndex] = currentScore + runsScored;
-            } else {
-                mockBaseballState.score.opponent += runsScored;
-                const scoreIndex = mockBaseballState.inning - 1;
-                const currentScore = parseInt(mockBaseballState.inningScores.opponent[scoreIndex]) || 0;
-                mockBaseballState.inningScores.opponent[scoreIndex] = currentScore + runsScored;
-            }
-            
-            mockBaseballState.runners = [false, false, false];
-            mockBaseballState.lastPlay = `${batterName}のホームラン！ ${runsScored}点が入りました！`;
-        }
-        
-        // Next Batter Setup
-        if (mockBaseballState.outs < 3) {
-            nextBatter();
-        }
-    }
-    
-    // Check for inning change (3 Outs)
-    if (mockBaseballState.outs >= 3) {
-        mockBaseballState.outs = 0;
-        mockBaseballState.balls = 0;
-        mockBaseballState.strikes = 0;
-        mockBaseballState.runners = [false, false, false];
-        
-        const currentInningIndex = mockBaseballState.inning - 1;
-        
-        if (!mockBaseballState.bottom) {
-            // Top to Bottom (Change to Hanshin attacking)
-            mockBaseballState.bottom = true;
-            mockBaseballState.lastPlay = `チェンジ。巨人の攻撃は無得点。${mockBaseballState.inning}回裏 阪神の攻撃に移ります。`;
-            mockBaseballState.inningScores.hanshin[currentInningIndex] = 0; // Initialize score
-        } else {
-            // Bottom to Top (Change to Opponent attacking, inning increments)
-            mockBaseballState.bottom = false;
-            
-            // Check for game end
-            if (mockBaseballState.inning >= 9) {
-                // Game End Condition
-                mockBaseballState.playing = false;
-                mockBaseballState.lastPlay = `ゲームセット！試合終了。阪神 ${mockBaseballState.score.hanshin} - ${mockBaseballState.score.opponent} 巨人。阪神タイガースの勝利です！`;
-                return;
-            }
-            
-            mockBaseballState.inning++;
-            mockBaseballState.lastPlay = `チェンジ。阪神の攻撃終了。${mockBaseballState.inning}回表 巨人の攻撃に移ります。`;
-            mockBaseballState.inningScores.opponent[currentInningIndex + 1] = 0; // Initialize next opponent score
-        }
-        
-        // Reset batter/pitcher matchups on half-inning change
-        nextBatter();
-    }
-    
-    function advanceRunners(isHit) {
-        const bottom = mockBaseballState.bottom;
-        let runsScored = 0;
-        
-        if (isHit) {
-            // Simple runner progression on hit
-            // 3rd base scores
-            if (mockBaseballState.runners[2]) { runsScored++; mockBaseballState.runners[2] = false; }
-            // 2nd base scores or moves to 3rd
-            if (mockBaseballState.runners[1]) {
-                if (Math.random() < 0.6) {
-                    runsScored++;
-                } else {
-                    mockBaseballState.runners[2] = true;
-                }
-                mockBaseballState.runners[1] = false;
-            }
-            // 1st base moves to 2nd or 3rd
-            if (mockBaseballState.runners[0]) {
-                if (Math.random() < 0.5 && !mockBaseballState.runners[2]) {
-                    mockBaseballState.runners[2] = true;
-                } else {
-                    mockBaseballState.runners[1] = true;
-                }
-                mockBaseballState.runners[0] = false;
-            }
-            // Batter goes to 1st
-            mockBaseballState.runners[0] = true;
-        } else {
-            // Walk runner progression (Force play)
-            if (mockBaseballState.runners[0] && mockBaseballState.runners[1] && mockBaseballState.runners[2]) {
-                runsScored++;
-            }
-            if (mockBaseballState.runners[0] && mockBaseballState.runners[1]) {
-                mockBaseballState.runners[2] = true;
-            }
-            if (mockBaseballState.runners[0]) {
-                mockBaseballState.runners[1] = true;
-            }
-            mockBaseballState.runners[0] = true;
-        }
-        
-        if (runsScored > 0) {
-            const scoreIndex = mockBaseballState.inning - 1;
-            if (bottom) {
-                mockBaseballState.score.hanshin += runsScored;
-                const currentScore = parseInt(mockBaseballState.inningScores.hanshin[scoreIndex]) || 0;
-                mockBaseballState.inningScores.hanshin[scoreIndex] = currentScore + runsScored;
-                mockBaseballState.lastPlay += ` 阪神が ${runsScored}点 を追加！`;
-            } else {
-                mockBaseballState.score.opponent += runsScored;
-                const currentScore = parseInt(mockBaseballState.inningScores.opponent[scoreIndex]) || 0;
-                mockBaseballState.inningScores.opponent[scoreIndex] = currentScore + runsScored;
-                mockBaseballState.lastPlay += ` 巨人が ${runsScored}点 を獲得！`;
-            }
-        }
-    }
-    
-    function nextBatter() {
-        const bottom = mockBaseballState.bottom;
-        if (bottom) {
-            // Hanshin attacking (Giant pitcher, Hanshin batter)
-            mockBaseballState.pitcher = "戸郷";
-            const idx = Math.floor(Math.random() * hanshinPlayers.length);
-            mockBaseballState.batter = hanshinPlayers[idx];
-        } else {
-            // Giant attacking (Hanshin pitcher, Giant batter)
-            mockBaseballState.pitcher = "才木";
-            const idx = Math.floor(Math.random() * opponentPlayers.length);
-            mockBaseballState.batter = opponentPlayers[idx];
-        }
+        });
     }
 }
 
