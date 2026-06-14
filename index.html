@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=VT323&display=swap" rel="stylesheet">
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css?v=2.03">
+    <link rel="stylesheet" href="style.css?v=2.04">
     <!-- Google Identity Services SDK for Google Calendar integration -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- PWA Settings -->
@@ -31,7 +31,7 @@
             <!-- Header (Retro BIOS Style) -->
             <header class="app-header">
                 <div class="logo-area">
-                    <span class="logo-text">>_ C.O.S.M.O.S.<span class="hide-mobile"> SYSTEM [ROM v2.03]</span></span>
+                    <span class="logo-text">>_ C.O.S.M.O.S.<span class="hide-mobile"> SYSTEM [ROM v2.04]</span></span>
                 </div>
                 <div class="system-status">
                     <span class="status-indicator online"></span>
@@ -67,7 +67,7 @@
                     </div>
 
                     <!-- Sound Board (Music Player) Panel -->
-                    <div class="music-player-panel">
+                    <div id="musicPlayerPanel" class="music-player-panel">
                         <!-- Visualizer -->
                         <canvas id="visualizerCanvas" class="visualizer-canvas" width="240" height="35"></canvas>
                         
@@ -98,6 +98,7 @@
                         <div class="source-controls">
                             <button id="musicLoadDirBtn" class="retro-btn">[ LOAD_DIR ]</button>
                             <button id="musicLoadFilesBtn" class="retro-btn">[ SELECT_FILES ]</button>
+                            <button id="switchToBaseballBtn" class="retro-btn" style="color: var(--retro-amber); border-color: var(--retro-amber);">[ BASEBALL ]</button>
                             <input type="file" id="musicFileInput" multiple accept=".mp3,.m4a,.wav,.aac,.flac,.ogg,.mp4,.webm" style="display: none;">
                         </div>
 
@@ -107,6 +108,87 @@
                             <ul id="playlistList" class="playlist-list">
                                 <li class="empty-list">-- EMPTY --</li>
                             </ul>
+                        </div>
+                    </div>
+
+                    <!-- Baseball Mode Panel -->
+                    <div id="baseballPanel" class="music-player-panel" style="display: none;">
+                        <div class="window-title-bar" style="margin: -10px -15px 10px -15px; border-bottom: 2px solid var(--retro-cyan); display: flex; justify-content: space-between; align-items: center;">
+                            <span class="window-title" style="padding-left: 5px;">> BASEBALL_REPORT</span>
+                            <button id="baseballBackBtn" class="retro-btn" style="padding: 2px 8px; font-size: 0.75rem; margin-right: 5px;">[ MUSIC ]</button>
+                        </div>
+                        
+                        <div class="baseball-game-status" style="display: flex; flex-direction: column; height: 100%; justify-content: space-between;">
+                            <!-- Scoreboard -->
+                            <div class="scoreboard">
+                                <table class="scoreboard-table">
+                                    <thead>
+                                        <tr>
+                                            <th>TEAM</th>
+                                            <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>R</th><th>H</th><th>E</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr id="teamOpponentRow">
+                                            <td id="opponentNameLabel" class="opponent-name">-</td>
+                                            <td id="opp1">-</td><td id="opp2">-</td><td id="opp3">-</td><td id="opp4">-</td><td id="opp5">-</td><td id="opp6">-</td><td id="opp7">-</td><td id="opp8">-</td><td id="opp9">-</td>
+                                            <td id="oppRuns" class="runs">0</td><td id="oppHits">0</td><td id="oppErrors">0</td>
+                                        </tr>
+                                        <tr id="teamHanshinRow">
+                                            <td class="hanshin-name">阪神</td>
+                                            <td id="han1">-</td><td id="han2">-</td><td id="han3">-</td><td id="han4">-</td><td id="han5">-</td><td id="han6">-</td><td id="han7">-</td><td id="han8">-</td><td id="han9">-</td>
+                                            <td id="hanRuns" class="runs">0</td><td id="hanHits">0</td><td id="hanErrors">0</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Game Detail Grid (Inning, BSO, Runners) -->
+                            <div class="game-detail-grid">
+                                <div class="game-info-col">
+                                    <div id="inningDisplay" class="inning-display">> 試合前</div>
+                                    <div class="bsos-display">
+                                        <div class="bso-row">
+                                            <span class="bso-label">B:</span>
+                                            <span id="ballCount" class="bso-dots"><span class="dot-inactive">●</span><span class="dot-inactive">●</span><span class="dot-inactive">●</span></span>
+                                        </div>
+                                        <div class="bso-row">
+                                            <span class="bso-label">S:</span>
+                                            <span id="strikeCount" class="bso-dots"><span class="dot-inactive">●</span><span class="dot-inactive">●</span></span>
+                                        </div>
+                                        <div class="bso-row">
+                                            <span class="bso-label">O:</span>
+                                            <span id="outCount" class="bso-dots"><span class="dot-inactive">●</span><span class="dot-inactive">●</span></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="runners-diamond">
+                                    <div class="diamond">
+                                        <div id="base2" class="base second-base"></div>
+                                        <div id="base3" class="base third-base"></div>
+                                        <div id="base1" class="base first-base"></div>
+                                        <div class="home-plate"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Batter / Pitcher Matchup -->
+                            <div class="player-matchup">
+                                <div>投手: <span id="currentPitcher">-</span></div>
+                                <div>打者: <span id="currentBatter">-</span></div>
+                            </div>
+                            
+                            <!-- Last Play Content -->
+                            <div class="last-play-box">
+                                <div class="last-play-title">> DIRECT_REPORT</div>
+                                <div id="lastPlayText" class="last-play-content">速報データを待機中...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="baseball-footer">
+                            <span id="baseballUpdateTimer" class="timer-text">UPDATE IN 30s</span>
+                            <button id="baseballRefreshBtn" class="retro-btn" style="padding: 1px 6px; font-size: 0.75rem;">[ REFRESH ]</button>
                         </div>
                     </div>
                 </section>
@@ -266,6 +348,6 @@
             });
         }
     </script>
-    <script src="app.js?v=2.03"></script>
+    <script src="app.js?v=2.04"></script>
 </body>
 </html>

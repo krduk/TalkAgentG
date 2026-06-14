@@ -1132,3 +1132,187 @@ input[type="checkbox"]:checked + .switch-slider::after {
         font-size: 0.75rem;
     }
 }
+
+/* ==========================================
+   BASEBALL MODE PANEL STYLES
+   ========================================== */
+#baseballPanel {
+    font-family: 'DotGothic16', monospace;
+}
+
+.scoreboard {
+    margin-bottom: 8px;
+    background: #000;
+    overflow-x: auto;
+}
+
+.scoreboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    text-align: center;
+    color: var(--retro-green);
+}
+
+.scoreboard-table th, .scoreboard-table td {
+    border: 1px solid rgba(51, 255, 51, 0.3);
+    padding: 3px 2px;
+}
+
+.scoreboard-table th {
+    background-color: rgba(51, 255, 51, 0.1);
+    color: var(--retro-cyan);
+}
+
+.scoreboard-table td.runs {
+    color: var(--retro-amber);
+    font-weight: bold;
+}
+
+.game-detail-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 4px;
+    border: 1px solid rgba(51, 255, 51, 0.2);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.game-info-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.inning-display {
+    font-size: 0.8rem;
+    color: var(--retro-cyan);
+    font-weight: bold;
+}
+
+.bsos-display {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.75rem;
+}
+
+.bso-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.bso-label {
+    width: 15px;
+    font-weight: bold;
+}
+
+.bso-dots {
+    letter-spacing: 2px;
+}
+
+.bso-dots .dot-active {
+    color: var(--retro-green);
+}
+
+.bso-dots .dot-inactive {
+    color: rgba(51, 255, 51, 0.15);
+}
+
+/* BSO Dots Colors */
+.bso-row:nth-child(1) .dot-active { color: #33ff33; } /* Ball: Green */
+.bso-row:nth-child(2) .dot-active { color: #ffcc00; } /* Strike: Yellow/Amber */
+.bso-row:nth-child(3) .dot-active { color: #ff3333; } /* Out: Red */
+
+/* Runners Diamond Visualizer */
+.runners-diamond {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.diamond {
+    width: 36px;
+    height: 36px;
+    border: 1px dashed rgba(51, 255, 51, 0.4);
+    transform: rotate(45deg);
+    position: relative;
+}
+
+.base {
+    width: 8px;
+    height: 8px;
+    background: #000;
+    border: 1px solid var(--retro-green);
+    position: absolute;
+    box-sizing: border-box;
+}
+
+.first-base {
+    top: 14px;
+    right: -4px;
+}
+
+.second-base {
+    top: -4px;
+    left: 14px;
+}
+
+.third-base {
+    top: 14px;
+    left: -4px;
+}
+
+.home-plate {
+    width: 6px;
+    height: 6px;
+    background: var(--retro-green);
+    position: absolute;
+    bottom: -3px;
+    left: 15px;
+    transform: scale(0.8);
+}
+
+.base.active {
+    background: var(--retro-amber);
+    box-shadow: 0 0 5px var(--retro-amber);
+}
+
+.player-matchup {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    margin-bottom: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    color: var(--retro-green);
+    display: flex;
+    justify-content: space-between;
+}
+
+.last-play-box {
+    padding: 6px;
+    background: rgba(0, 0, 0, 0.4);
+    font-size: 0.75rem;
+    min-height: 40px;
+    margin-bottom: 8px;
+}
+
+.last-play-title {
+    color: var(--retro-cyan);
+    margin-bottom: 2px;
+}
+
+.last-play-content {
+    color: #ffffff;
+}
+
+.baseball-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    color: rgba(51, 255, 51, 0.5);
+}

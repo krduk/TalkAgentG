@@ -43,6 +43,14 @@ let currentTrackIndex = -1;
 let isPlaying = false;
 let playMode = 'normal'; // 'normal', 'repeat-all', 'repeat-one', 'shuffle'
 let musicAudio = null;
+
+// Baseball Mode State
+let isBaseballMode = false;
+let baseballTimer = null;
+let baseballCountdown = 30;
+let baseballCountdownInterval = null;
+let baseballData = null;
+let mockBaseballState = null;
 let musicSource = null;
 let musicAnalyser = null;
 let musicGainNode = null;
@@ -84,7 +92,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.03] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.04] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -101,7 +109,7 @@ async function init() {
     initMusicPlayer();
     preloadMusicPortraits();
     await restorePlayerState();
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.03] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.04] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -595,6 +603,15 @@ function setupEventListeners() {
     
     // Clear Chat
     clearChatBtn.addEventListener('click', clearChat);
+
+    // Baseball Mode Buttons
+    const switchToBaseballBtn = document.getElementById('switchToBaseballBtn');
+    const baseballBackBtn = document.getElementById('baseballBackBtn');
+    const baseballRefreshBtn = document.getElementById('baseballRefreshBtn');
+    
+    if (switchToBaseballBtn) switchToBaseballBtn.addEventListener('click', enableBaseballMode);
+    if (baseballBackBtn) baseballBackBtn.addEventListener('click', disableBaseballMode);
+    if (baseballRefreshBtn) baseballRefreshBtn.addEventListener('click', () => fetchBaseballData(true));
 }
 
 // Modal actions
@@ -1116,6 +1133,20 @@ ${musicStatusText}
                             }
                         }
                     }
+                },
+                {
+                    name: "baseball_set_mode",
+                    description: "Toggle baseball mode to watch Hanshin Tigers real-time game updates and score reports. The agent will also wear a baseball cap.",
+                    parameters: {
+                        type: "OBJECT",
+                        properties: {
+                            enabled: {
+                                type: "BOOLEAN",
+                                description: "Set to true to enable baseball mode, or false to disable it and return to music mode."
+                            }
+                        },
+                        required: ["enabled"]
+                    }
                 }
             ]
         }
@@ -1440,6 +1471,17 @@ ${musicStatusText}
                                 }
                             }
                         }
+                    }
+                } else if (name === 'baseball_set_mode') {
+                    const enabled = args.enabled;
+                    if (enabled) {
+                        enableBaseballMode();
+                        result = { status: "success", message: "Baseball mode enabled. Hanshin Tigers real-time score tracker is now active. Luna is now wearing a baseball cap." };
+                        appendSystemMessage("LUNA: ENABLED BASEBALL MODE");
+                    } else {
+                        disableBaseballMode();
+                        result = { status: "success", message: "Baseball mode disabled. Returned to music player mode. Luna took off the baseball cap." };
+                        appendSystemMessage("LUNA: DISABLED BASEBALL MODE");
                     }
                 }
                 
@@ -2747,6 +2789,11 @@ TOTAL_LOADED_FILES_POOL_SIZE: ${allLoadedFiles.length}
 6. あなたは再生リスト（プレイリスト）の作成、管理、並び替え、曲の削除、保存されたリストの読み込みなどの操作を \`music_create_playlist\`, \`music_load_playlist\`, \`music_delete_playlist\`, \`music_get_playlists\`, \`music_remove_track\`, \`music_reorder_playlist\` ツールで実行できます。
 7. ユーザーが再生中の曲や特定の曲の歌詞・文字起こしを希望した場合は、 \`music_transcribe_song\` ツールを実行して音声データの文字起こしを行ってください。文字起こしには数秒から十数秒かかる場合があるため、ユーザーに少々待つように伝えてください。
 8. ユーザーが曲のメロディ、雰囲気、ボーカルの声質、楽器などについての感想や印象を聞きたい場合は、 \`music_analyze_song\` ツールを実行して音声データの曲調分析を行ってください。
+
+[BASEBALL_MODE_GUIDELINES]
+1. ユーザーがプロ野球（特に阪神戦）の速報や試合状況について尋ねてきたら、必ず \`baseball_set_mode\` ツールを \`enabled: true\` で呼び出して野球モードを有効にしてください。
+2. ユーザーが「音楽モードに戻して」「音楽プレイヤーを表示して」と言った場合は、\`baseball_set_mode\` ツールを \`enabled: false\` で呼び出して元に戻してください。
+3. 野球モード中、あなたは野球帽をかぶります。30秒ごとに更新される速報（スコア、バッター、ピッチャー、イニング、B/S/Oカウント、走者状況、直前のプレーなど）を読み取って、ギャルオペレーターらしく熱狂的に阪神タイガースを実況・応援したり、試合状況をユーザーに楽しく解説してください。本日の阪神戦が行われていない（試合前・試合終了後・試合がない日）場合はその旨をユーザーに伝えてください。
 `;
     return statusText;
 }
@@ -2770,6 +2817,12 @@ function updatePortraitUI() {
     
     // Cache buster to force browsers to reload newly overwritten images instantly
     const v = '?v=10';
+    
+    // 野球モードの場合は野球帽をかぶった画像を表示
+    if (isBaseballMode) {
+        portrait.src = 'assets/elena_mono_baseball.jpg' + v;
+        return;
+    }
     
     if (isPuttingHeadphones || isRemovingHeadphones) {
         portrait.src = 'assets/elena_mono_put_headphones.jpg' + v;
@@ -2795,4 +2848,466 @@ function updatePortraitUI() {
     }
     
     portrait.src = `assets/elena_mono_${state}${suffix}.${ext}${v}`;
+}
+
+// ==========================================
+// BASEBALL MODE REAL-TIME CONTROL LOGIC
+// ==========================================
+
+function enableBaseballMode() {
+    isBaseballMode = true;
+    
+    // Switch UI panels
+    const musicPanel = document.getElementById('musicPlayerPanel');
+    const baseballPanel = document.getElementById('baseballPanel');
+    if (musicPanel) musicPanel.style.display = 'none';
+    if (baseballPanel) baseballPanel.style.display = 'flex';
+    
+    // Update portrait (Luna wears a cap)
+    updatePortraitUI();
+    
+    // Trigger initial fetch
+    fetchBaseballData();
+    
+    // Start interval
+    startBaseballTimer();
+}
+
+function disableBaseballMode() {
+    isBaseballMode = false;
+    
+    // Switch UI panels
+    const musicPanel = document.getElementById('musicPlayerPanel');
+    const baseballPanel = document.getElementById('baseballPanel');
+    if (musicPanel) musicPanel.style.display = 'flex';
+    if (baseballPanel) baseballPanel.style.display = 'none';
+    
+    // Update portrait (Luna takes off the cap)
+    updatePortraitUI();
+    
+    // Stop intervals
+    stopBaseballTimer();
+}
+
+function startBaseballTimer() {
+    stopBaseballTimer();
+    
+    baseballCountdown = 30;
+    const timerText = document.getElementById('baseballUpdateTimer');
+    if (timerText) timerText.textContent = `UPDATE IN ${baseballCountdown}s`;
+    
+    // 1-second countdown interval
+    baseballCountdownInterval = setInterval(() => {
+        baseballCountdown--;
+        if (timerText) timerText.textContent = `UPDATE IN ${baseballCountdown}s`;
+        
+        if (baseballCountdown <= 0) {
+            fetchBaseballData();
+        }
+    }, 1000);
+}
+
+function stopBaseballTimer() {
+    if (baseballCountdownInterval) {
+        clearInterval(baseballCountdownInterval);
+        baseballCountdownInterval = null;
+    }
+}
+
+async function fetchBaseballData(isManual = false) {
+    // Reset countdown if updating
+    baseballCountdown = 30;
+    const timerText = document.getElementById('baseballUpdateTimer');
+    if (timerText) timerText.textContent = isManual ? "LOADING..." : `UPDATE IN ${baseballCountdown}s`;
+
+    if (config.mode === 'mock' || !config.apiKey) {
+        // Mock Mode Update
+        updateBaseballMockData();
+        renderBaseballUI(mockBaseballState);
+    } else {
+        // API Mode Update (Gemini Google Search Integration)
+        try {
+            const prompt = "本日のプロ野球、阪神タイガースの試合について、最新の一球速報データ（対戦相手チーム名、各チームの現在の得点、現在のイニング数、表か裏か、アウトカウント数(0〜2)、ボールカウント(0〜3)、ストライクカウント(0〜2)、ランナーの状況(1塁,2塁,3塁)、現在の投手名、打者名、直近のプレイ内容）をGoogle検索で調べて、必ず以下のJSON構造のみで答えてください。説明文などは一切不要です。本日に阪神戦が開催されていない、または試合時間外の場合は `playing` を false にし、lastPlay部分に試合日程や結果概要を書いてください：\n" +
+                           "{\n" +
+                           "  \"playing\": true,\n" +
+                           "  \"opponent\": \"巨人\",\n" +
+                           "  \"score\": {\"hanshin\": 3, \"opponent\": 1},\n" +
+                           "  \"inning\": \"8\",\n" +
+                           "  \"bottom\": true,\n" +
+                           "  \"balls\": 2,\n" +
+                           "  \"strikes\": 1,\n" +
+                           "  \"outs\": 2,\n" +
+                           "  \"runners\": [true, false, false],\n" +
+                           "  \"pitcher\": \"菅野\",\n" +
+                           "  \"batter\": \"佐藤輝\",\n" +
+                           "  \"lastPlay\": \"佐藤輝、ライト前タイムリーヒット！阪神が1点リード。\"\n" +
+                           "}";
+
+            const modelName = 'gemini-3.1-flash-lite';
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${config.apiKey}`;
+            
+            const payload = {
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                tools: [{ googleSearch: {} }],
+                generationConfig: {
+                    temperature: 0.2,
+                    responseMimeType: "application/json"
+                }
+            };
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}`);
+            }
+            
+            const data = await response.json();
+            let resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!resultText) {
+                throw new Error("Empty API response");
+            }
+            
+            // Clean up codeblock markers if Gemini included them
+            resultText = resultText.trim();
+            if (resultText.startsWith("```")) {
+                resultText = resultText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+            }
+            
+            const parsed = JSON.parse(resultText);
+            renderBaseballUI(parsed);
+        } catch (err) {
+            console.warn("Baseball API fetch failed, falling back to mock updates:", err);
+            updateBaseballMockData();
+            renderBaseballUI(mockBaseballState);
+        }
+    }
+}
+
+function updateBaseballMockData() {
+    const hanshinPlayers = ["近本", "中野", "森下", "大山", "佐藤輝", "前川", "梅野", "木浪", "才木"];
+    const opponentPlayers = ["丸", "吉川", "ヘルナンデス", "岡本和", "坂本", "大城", "門脇", "小林", "戸郷"];
+    
+    if (!mockBaseballState) {
+        mockBaseballState = {
+            playing: true,
+            opponent: "巨人",
+            score: { hanshin: 0, opponent: 0 },
+            inning: 1,
+            bottom: false, // false = 1回表 (巨人), true = 1回裏 (阪神)
+            balls: 0,
+            strikes: 0,
+            outs: 0,
+            runners: [false, false, false],
+            pitcher: "才木", // 阪神の投手 (巨人の攻撃中)
+            batter: "丸",   // 巨人の打者
+            lastPlay: "プレイボール！試合開始です。",
+            inningScores: {
+                opponent: Array(9).fill(""),
+                hanshin: Array(9).fill("")
+            }
+        };
+        mockBaseballState.inningScores.opponent[0] = 0;
+        return;
+    }
+    
+    // Simulate game state progression
+    // 60% chance of pitch count increment, 40% chance of dynamic play event
+    const rand = Math.random();
+    if (rand < 0.6) {
+        // Strike / Ball count progression
+        const pitch = Math.random();
+        if (pitch < 0.45) {
+            mockBaseballState.balls = Math.min(3, mockBaseballState.balls + 1);
+            mockBaseballState.lastPlay = `ボール！カウント ${mockBaseballState.balls}B-${mockBaseballState.strikes}S`;
+        } else if (pitch < 0.85) {
+            mockBaseballState.strikes = Math.min(2, mockBaseballState.strikes + 1);
+            mockBaseballState.lastPlay = `ストライク！カウント ${mockBaseballState.balls}B-${mockBaseballState.strikes}S`;
+        } else {
+            // Foul ball (only adds strike if strikes < 2)
+            if (mockBaseballState.strikes < 2) {
+                mockBaseballState.strikes++;
+            }
+            mockBaseballState.lastPlay = `ファウルボール。カウント ${mockBaseballState.balls}B-${mockBaseballState.strikes}S`;
+        }
+    } else {
+        // Action Play Event (At-bat resolution)
+        const play = Math.random();
+        const batterName = mockBaseballState.batter;
+        
+        if (play < 0.3) {
+            // Strikeout / Strikeout looking
+            mockBaseballState.outs++;
+            mockBaseballState.strikes = 0;
+            mockBaseballState.balls = 0;
+            mockBaseballState.lastPlay = `${batterName}、空振り三振！ ${mockBaseballState.outs}アウト。`;
+        } else if (play < 0.55) {
+            // Infield/Outfield Out
+            mockBaseballState.outs++;
+            mockBaseballState.strikes = 0;
+            mockBaseballState.balls = 0;
+            const outs = ["レフトフライ", "サードゴロ", "ファーストフライ", "セカンドフライ", "ショートゴロ", "センターフライ"];
+            const outType = outs[Math.floor(Math.random() * outs.length)];
+            mockBaseballState.lastPlay = `${batterName}は${outType}に倒れました。${mockBaseballState.outs}アウト。`;
+        } else if (play < 0.65) {
+            // Walk (Four balls)
+            mockBaseballState.strikes = 0;
+            mockBaseballState.balls = 0;
+            mockBaseballState.lastPlay = `${batterName}、フォアボールを選んで出塁。`;
+            advanceRunners(false);
+        } else if (play < 0.93) {
+            // Hit (Single/Double)
+            mockBaseballState.strikes = 0;
+            mockBaseballState.balls = 0;
+            const hitType = Math.random() < 0.85 ? "ヒット" : "ツーベースヒット";
+            const directions = ["レフト前", "ライト前", "センター前", "三遊間を抜ける", "一二塁間を破る", "右中間フェンス直撃の"];
+            const dir = directions[Math.floor(Math.random() * directions.length)];
+            
+            mockBaseballState.lastPlay = `${batterName}、${dir}${hitType}！`;
+            advanceRunners(true);
+        } else {
+            // Home run!
+            mockBaseballState.strikes = 0;
+            mockBaseballState.balls = 0;
+            let runsScored = 1; // Batter scores
+            mockBaseballState.runners.forEach(r => { if (r) runsScored++; });
+            
+            if (mockBaseballState.bottom) {
+                mockBaseballState.score.hanshin += runsScored;
+                const scoreIndex = mockBaseballState.inning - 1;
+                const currentScore = parseInt(mockBaseballState.inningScores.hanshin[scoreIndex]) || 0;
+                mockBaseballState.inningScores.hanshin[scoreIndex] = currentScore + runsScored;
+            } else {
+                mockBaseballState.score.opponent += runsScored;
+                const scoreIndex = mockBaseballState.inning - 1;
+                const currentScore = parseInt(mockBaseballState.inningScores.opponent[scoreIndex]) || 0;
+                mockBaseballState.inningScores.opponent[scoreIndex] = currentScore + runsScored;
+            }
+            
+            mockBaseballState.runners = [false, false, false];
+            mockBaseballState.lastPlay = `${batterName}のホームラン！ ${runsScored}点が入りました！`;
+        }
+        
+        // Next Batter Setup
+        if (mockBaseballState.outs < 3) {
+            nextBatter();
+        }
+    }
+    
+    // Check for inning change (3 Outs)
+    if (mockBaseballState.outs >= 3) {
+        mockBaseballState.outs = 0;
+        mockBaseballState.balls = 0;
+        mockBaseballState.strikes = 0;
+        mockBaseballState.runners = [false, false, false];
+        
+        const currentInningIndex = mockBaseballState.inning - 1;
+        
+        if (!mockBaseballState.bottom) {
+            // Top to Bottom (Change to Hanshin attacking)
+            mockBaseballState.bottom = true;
+            mockBaseballState.lastPlay = `チェンジ。巨人の攻撃は無得点。${mockBaseballState.inning}回裏 阪神の攻撃に移ります。`;
+            mockBaseballState.inningScores.hanshin[currentInningIndex] = 0; // Initialize score
+        } else {
+            // Bottom to Top (Change to Opponent attacking, inning increments)
+            mockBaseballState.bottom = false;
+            
+            // Check for game end
+            if (mockBaseballState.inning >= 9) {
+                // Game End Condition
+                mockBaseballState.playing = false;
+                mockBaseballState.lastPlay = `ゲームセット！試合終了。阪神 ${mockBaseballState.score.hanshin} - ${mockBaseballState.score.opponent} 巨人。阪神タイガースの勝利です！`;
+                return;
+            }
+            
+            mockBaseballState.inning++;
+            mockBaseballState.lastPlay = `チェンジ。阪神の攻撃終了。${mockBaseballState.inning}回表 巨人の攻撃に移ります。`;
+            mockBaseballState.inningScores.opponent[currentInningIndex + 1] = 0; // Initialize next opponent score
+        }
+        
+        // Reset batter/pitcher matchups on half-inning change
+        nextBatter();
+    }
+    
+    function advanceRunners(isHit) {
+        const bottom = mockBaseballState.bottom;
+        let runsScored = 0;
+        
+        if (isHit) {
+            // Simple runner progression on hit
+            // 3rd base scores
+            if (mockBaseballState.runners[2]) { runsScored++; mockBaseballState.runners[2] = false; }
+            // 2nd base scores or moves to 3rd
+            if (mockBaseballState.runners[1]) {
+                if (Math.random() < 0.6) {
+                    runsScored++;
+                } else {
+                    mockBaseballState.runners[2] = true;
+                }
+                mockBaseballState.runners[1] = false;
+            }
+            // 1st base moves to 2nd or 3rd
+            if (mockBaseballState.runners[0]) {
+                if (Math.random() < 0.5 && !mockBaseballState.runners[2]) {
+                    mockBaseballState.runners[2] = true;
+                } else {
+                    mockBaseballState.runners[1] = true;
+                }
+                mockBaseballState.runners[0] = false;
+            }
+            // Batter goes to 1st
+            mockBaseballState.runners[0] = true;
+        } else {
+            // Walk runner progression (Force play)
+            if (mockBaseballState.runners[0] && mockBaseballState.runners[1] && mockBaseballState.runners[2]) {
+                runsScored++;
+            }
+            if (mockBaseballState.runners[0] && mockBaseballState.runners[1]) {
+                mockBaseballState.runners[2] = true;
+            }
+            if (mockBaseballState.runners[0]) {
+                mockBaseballState.runners[1] = true;
+            }
+            mockBaseballState.runners[0] = true;
+        }
+        
+        if (runsScored > 0) {
+            const scoreIndex = mockBaseballState.inning - 1;
+            if (bottom) {
+                mockBaseballState.score.hanshin += runsScored;
+                const currentScore = parseInt(mockBaseballState.inningScores.hanshin[scoreIndex]) || 0;
+                mockBaseballState.inningScores.hanshin[scoreIndex] = currentScore + runsScored;
+                mockBaseballState.lastPlay += ` 阪神が ${runsScored}点 を追加！`;
+            } else {
+                mockBaseballState.score.opponent += runsScored;
+                const currentScore = parseInt(mockBaseballState.inningScores.opponent[scoreIndex]) || 0;
+                mockBaseballState.inningScores.opponent[scoreIndex] = currentScore + runsScored;
+                mockBaseballState.lastPlay += ` 巨人が ${runsScored}点 を獲得！`;
+            }
+        }
+    }
+    
+    function nextBatter() {
+        const bottom = mockBaseballState.bottom;
+        if (bottom) {
+            // Hanshin attacking (Giant pitcher, Hanshin batter)
+            mockBaseballState.pitcher = "戸郷";
+            const idx = Math.floor(Math.random() * hanshinPlayers.length);
+            mockBaseballState.batter = hanshinPlayers[idx];
+        } else {
+            // Giant attacking (Hanshin pitcher, Giant batter)
+            mockBaseballState.pitcher = "才木";
+            const idx = Math.floor(Math.random() * opponentPlayers.length);
+            mockBaseballState.batter = opponentPlayers[idx];
+        }
+    }
+}
+
+function renderBaseballUI(data) {
+    if (!data) return;
+    
+    // Set team name
+    const oppName = data.opponent || "対戦相手";
+    const oppLabel = document.getElementById('opponentNameLabel');
+    if (oppLabel) oppLabel.textContent = oppName;
+    
+    // Render Inning
+    const inningDisplay = document.getElementById('inningDisplay');
+    if (inningDisplay) {
+        if (data.playing) {
+            const half = data.bottom ? "裏 阪神の攻撃" : "表 の攻撃";
+            inningDisplay.textContent = `> ${data.inning}回${data.bottom ? "裏 阪神の攻撃" : "表 " + oppName + "の攻撃"}`;
+        } else {
+            inningDisplay.textContent = "> 試合終了 または 時間外";
+        }
+    }
+    
+    // Render Matchup
+    const pitcherEl = document.getElementById('currentPitcher');
+    const batterEl = document.getElementById('currentBatter');
+    if (pitcherEl) pitcherEl.textContent = data.pitcher || "-";
+    if (batterEl) batterEl.textContent = data.batter || "-";
+    
+    // Render Last Play
+    const lastPlayEl = document.getElementById('lastPlayText');
+    if (lastPlayEl) lastPlayEl.textContent = data.lastPlay || "実況待機中...";
+    
+    // Render BSO Counts
+    updateBSODots('ballCount', data.balls || 0, 3);
+    updateBSODots('strikeCount', data.strikes || 0, 2);
+    updateBSODots('outCount', data.outs || 0, 2);
+    
+    // Render runners diamond
+    const runners = data.runners || [false, false, false];
+    const b1 = document.getElementById('base1');
+    const b2 = document.getElementById('base2');
+    const b3 = document.getElementById('base3');
+    
+    if (b1) { if (runners[0]) b1.classList.add('active'); else b1.classList.remove('active'); }
+    if (b2) { if (runners[1]) b2.classList.add('active'); else b2.classList.remove('active'); }
+    if (b3) { if (runners[2]) b3.classList.add('active'); else b3.classList.remove('active'); }
+    
+    // Render Scoreboard Runs / Hits / Errors
+    const oppRunsEl = document.getElementById('oppRuns');
+    const hanRunsEl = document.getElementById('hanRuns');
+    if (oppRunsEl) oppRunsEl.textContent = data.score?.opponent ?? 0;
+    if (hanRunsEl) hanRunsEl.textContent = data.score?.hanshin ?? 0;
+    
+    // Scoreboard Columns
+    if (data.inningScores) {
+        for (let i = 1; i <= 9; i++) {
+            const oppCell = document.getElementById(`opp${i}`);
+            const hanCell = document.getElementById(`han${i}`);
+            
+            const oppScore = data.inningScores.opponent[i - 1];
+            const hanScore = data.inningScores.hanshin[i - 1];
+            
+            if (oppCell) oppCell.textContent = (oppScore !== undefined && oppScore !== "") ? oppScore : "-";
+            if (hanCell) hanCell.textContent = (hanScore !== undefined && hanScore !== "") ? hanScore : "-";
+        }
+    } else {
+        const currentInning = parseInt(data.inning) || 1;
+        for (let i = 1; i <= 9; i++) {
+            const oppCell = document.getElementById(`opp${i}`);
+            const hanCell = document.getElementById(`han${i}`);
+            
+            if (oppCell) {
+                if (i < currentInning) {
+                    oppCell.textContent = "0";
+                } else if (i === currentInning && !data.bottom) {
+                    oppCell.textContent = data.score?.opponent ?? 0;
+                } else {
+                    oppCell.textContent = "-";
+                }
+            }
+            
+            if (hanCell) {
+                if (i < currentInning) {
+                    hanCell.textContent = "0";
+                } else if (i === currentInning && data.bottom) {
+                    hanCell.textContent = data.score?.hanshin ?? 0;
+                } else {
+                    hanCell.textContent = "-";
+                }
+            }
+        }
+    }
+}
+
+function updateBSODots(elementId, activeCount, maxCount) {
+    const parent = document.getElementById(elementId);
+    if (!parent) return;
+    
+    let dotsHtml = "";
+    for (let i = 0; i < maxCount; i++) {
+        if (i < activeCount) {
+            dotsHtml += '<span class="dot-active">●</span>';
+        } else {
+            dotsHtml += '<span class="dot-inactive">●</span>';
+        }
+    }
+    parent.innerHTML = dotsHtml;
 }
