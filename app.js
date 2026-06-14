@@ -2837,7 +2837,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.12';
+    const v = '?v=2.13';
     
     // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
     if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
@@ -3094,7 +3094,8 @@ async function fetchBaseballData(isManual = false) {
     if (timerText) timerText.textContent = isManual ? "LOADING..." : `UPDATE IN ${baseballCountdown}s`;
 
     try {
-        const targetUrl = 'https://baseball.yahoo.co.jp/npb/teams/11/top';
+        const cacheBuster = `?_ts=${Date.now()}`;
+        const targetUrl = 'https://baseball.yahoo.co.jp/npb/teams/11/top' + cacheBuster;
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
         
         const res = await fetch(proxyUrl);
@@ -3126,7 +3127,9 @@ async function fetchBaseballData(isManual = false) {
         
         if (config.apiKey && gameDetailUrl && domData && domData.playing) {
             try {
-                const detailProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gameDetailUrl)}`;
+                // クエリパラメータが既に存在する場合は &、ない場合は ? でキャッシュバスターを追加
+                const detailUrlWithBuster = gameDetailUrl + (gameDetailUrl.includes('?') ? '&' : '?') + `_ts=${Date.now()}`;
+                const detailProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(detailUrlWithBuster)}`;
                 const detailRes = await fetch(detailProxyUrl);
                 if (detailRes.ok) {
                     const detailHtml = await detailRes.text();
