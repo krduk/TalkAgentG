@@ -92,7 +92,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.17] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.18] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -118,7 +118,7 @@ async function init() {
         disableBaseballMode(true);
     }
     
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.17] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.18] Ready.");
 }
 
 function preloadMusicPortraits() {
