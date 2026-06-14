@@ -93,7 +93,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.20] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.21] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -119,7 +119,7 @@ async function init() {
         disableBaseballMode(true);
     }
     
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.20] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.21] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -618,11 +618,9 @@ function setupEventListeners() {
 
     // Baseball Mode Buttons
     const switchToBaseballBtn = document.getElementById('switchToBaseballBtn');
-    const baseballBackBtn = document.getElementById('baseballBackBtn');
     const baseballRefreshBtn = document.getElementById('baseballRefreshBtn');
     
     if (switchToBaseballBtn) switchToBaseballBtn.addEventListener('click', enableBaseballMode);
-    if (baseballBackBtn) baseballBackBtn.addEventListener('click', disableBaseballMode);
     if (baseballRefreshBtn) baseballRefreshBtn.addEventListener('click', () => fetchBaseballData(true));
 
     // Baseball Mode Tabs
@@ -2849,7 +2847,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.20';
+    const v = '?v=2.21';
     
     // 帽子をかぶる動作中、または帽子を脱ぐ動作中
     if (isPuttingBaseballCap || isRemovingBaseballCap) {
