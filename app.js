@@ -92,7 +92,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.05] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.06] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -109,7 +109,7 @@ async function init() {
     initMusicPlayer();
     preloadMusicPortraits();
     await restorePlayerState();
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.05] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.06] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -2818,12 +2818,6 @@ function updatePortraitUI() {
     // Cache buster to force browsers to reload newly overwritten images instantly
     const v = '?v=10';
     
-    // 野球モードの場合は野球帽をかぶった画像を表示
-    if (isBaseballMode) {
-        portrait.src = 'assets/elena_mono_baseball.jpg' + v;
-        return;
-    }
-    
     if (isPuttingHeadphones || isRemovingHeadphones) {
         portrait.src = 'assets/elena_mono_put_headphones.jpg' + v;
         return;
@@ -2863,7 +2857,16 @@ function enableBaseballMode() {
     if (musicPanel) musicPanel.style.display = 'none';
     if (baseballPanel) baseballPanel.style.display = 'flex';
     
-    // Update portrait (Luna wears a cap)
+    // Show cap overlay with animation
+    const capOverlay = document.getElementById('baseballCapOverlay');
+    if (capOverlay) {
+        capOverlay.style.display = 'block';
+        capOverlay.classList.remove('putting-on');
+        void capOverlay.offsetWidth; // Trigger reflow
+        capOverlay.classList.add('putting-on');
+    }
+    
+    // Update portrait
     updatePortraitUI();
     
     // Trigger initial fetch
@@ -2882,7 +2885,14 @@ function disableBaseballMode() {
     if (musicPanel) musicPanel.style.display = 'flex';
     if (baseballPanel) baseballPanel.style.display = 'none';
     
-    // Update portrait (Luna takes off the cap)
+    // Hide cap overlay
+    const capOverlay = document.getElementById('baseballCapOverlay');
+    if (capOverlay) {
+        capOverlay.style.display = 'none';
+        capOverlay.classList.remove('putting-on');
+    }
+    
+    // Update portrait
     updatePortraitUI();
     
     // Stop intervals

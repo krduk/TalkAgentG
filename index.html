@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=VT323&display=swap" rel="stylesheet">
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css?v=2.05">
+    <link rel="stylesheet" href="style.css?v=2.06">
     <!-- Google Identity Services SDK for Google Calendar integration -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- PWA Settings -->
@@ -31,7 +31,7 @@
             <!-- Header (Retro BIOS Style) -->
             <header class="app-header">
                 <div class="logo-area">
-                    <span class="logo-text">>_ C.O.S.M.O.S.<span class="hide-mobile"> SYSTEM [ROM v2.05]</span></span>
+                    <span class="logo-text">>_ C.O.S.M.O.S.<span class="hide-mobile"> SYSTEM [ROM v2.06]</span></span>
                 </div>
                 <div class="system-status">
                     <span class="status-indicator online"></span>
@@ -51,8 +51,9 @@
                         <span class="window-controls">■</span>
                     </div>
                     
-                    <div id="portraitContainer" class="portrait-container">
+                    <div id="portraitContainer" class="portrait-container" style="position: relative; overflow: hidden;">
                         <img id="characterPortrait" src="assets/elena_mono_low.png" alt="Elena Pixel Art" class="portrait-image">
+                        <img id="baseballCapOverlay" src="assets/baseball_cap.jpg" alt="Baseball Cap" class="baseball-cap-overlay" style="display: none;">
                     </div>
 
                     <!-- Hidden HUD elements to prevent app.js from breaking -->
@@ -348,6 +349,6 @@
             });
         }
     </script>
-    <script src="app.js?v=2.05"></script>
+    <script src="app.js?v=2.06"></script>
 </body>
 </html>

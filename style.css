@@ -1316,3 +1316,31 @@ input[type="checkbox"]:checked + .switch-slider::after {
     font-size: 0.7rem;
     color: rgba(51, 255, 51, 0.5);
 }
+
+/* Baseball Cap Overlay positioning and animation */
+.baseball-cap-overlay {
+    position: absolute;
+    top: -5px; /* adjust vertical position on head */
+    left: 50%;
+    transform: translateX(-50%) scale(0.65); /* adjust scale to fit head */
+    width: 100%;
+    height: auto;
+    mix-blend-mode: screen; /* hides black background, reveals green cap */
+    pointer-events: none;
+    z-index: 10;
+}
+
+.baseball-cap-overlay.putting-on {
+    animation: putOnCap 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes putOnCap {
+    0% {
+        transform: translateX(-50%) translateY(-100px) rotate(-15deg) scale(0.65);
+        opacity: 0;
+    }
+    100% {
+        transform: translateX(-50%) translateY(0) rotate(0deg) scale(0.65);
+        opacity: 1;
+    }
+}
