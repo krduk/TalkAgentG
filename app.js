@@ -92,7 +92,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.04] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.05] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -109,7 +109,7 @@ async function init() {
     initMusicPlayer();
     preloadMusicPortraits();
     await restorePlayerState();
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.04] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.05] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -2925,53 +2925,112 @@ async function fetchBaseballData(isManual = false) {
         updateBaseballMockData();
         renderBaseballUI(mockBaseballState);
     } else {
-        // API Mode Update (Gemini Google Search Integration)
+        // Scraper Mode Update (CORS proxy fetch + Gemini Text Extraction)
         try {
-            const prompt = "本日のプロ野球、阪神タイガースの試合について、最新の一球速報データ（対戦相手チーム名、各チームの現在の得点、現在のイニング数、表か裏か、アウトカウント数(0〜2)、ボールカウント(0〜3)、ストライクカウント(0〜2)、ランナーの状況(1塁,2塁,3塁)、現在の投手名、打者名、直近のプレイ内容）をGoogle検索で調べて、必ず以下のJSON構造のみで答えてください。説明文などは一切不要です。本日に阪神戦が開催されていない、または試合時間外の場合は `playing` を false にし、lastPlay部分に試合日程や結果概要を書いてください：\n" +
-                           "{\n" +
-                           "  \"playing\": true,\n" +
-                           "  \"opponent\": \"巨人\",\n" +
-                           "  \"score\": {\"hanshin\": 3, \"opponent\": 1},\n" +
-                           "  \"inning\": \"8\",\n" +
-                           "  \"bottom\": true,\n" +
-                           "  \"balls\": 2,\n" +
-                           "  \"strikes\": 1,\n" +
-                           "  \"outs\": 2,\n" +
-                           "  \"runners\": [true, false, false],\n" +
-                           "  \"pitcher\": \"菅野\",\n" +
-                           "  \"batter\": \"佐藤輝\",\n" +
-                           "  \"lastPlay\": \"佐藤輝、ライト前タイムリーヒット！阪神が1点リード。\"\n" +
-                           "}";
+            const targetUrl = 'https://baseball.yahoo.co.jp/npb/teams/11/top';
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+            
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error("CORS Proxy fetch failed");
+            
+            const html = await res.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            
+            // Remove scripts/styles to reduce token sizes
+            doc.querySelectorAll('script, style, iframe, header, footer, nav, noscript').forEach(el => el.remove());
+            
+            let gameHtml = '';
+            let gameDetailUrl = null;
+            
+            // Find the scoreboard card that contains Hanshin Tigers (阪神)
+            const scoreItems = doc.querySelectorAll('.bb-scoreList__item');
+            scoreItems.forEach(item => {
+                if (item.textContent.includes('阪神')) {
+                    gameHtml = item.outerHTML;
+                    const linkEl = item.querySelector('a');
+                    if (linkEl) {
+                        const href = linkEl.getAttribute('href');
+                        if (href) {
+                            if (href.startsWith('/')) {
+                                gameDetailUrl = 'https://baseball.yahoo.co.jp' + href;
+                            } else if (href.startsWith('http')) {
+                                gameDetailUrl = href;
+                            }
+                        }
+                    }
+                }
+            });
+            
+            let analysisText = gameHtml || doc.body.innerText.slice(0, 2500);
+            let usedUrl = targetUrl;
+            
+            // If the game is starting/active/ended and there is a detailed game link, fetch it for BSO, batter/pitcher matchups and play reports
+            if (gameDetailUrl && !analysisText.includes('13:00') && !analysisText.includes('14:00') && !analysisText.includes('18:00')) {
+                try {
+                    const detailProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(gameDetailUrl)}`;
+                    const detailRes = await fetch(detailProxyUrl);
+                    if (detailRes.ok) {
+                        const detailHtml = await detailRes.text();
+                        const detailDoc = parser.parseFromString(detailHtml, 'text/html');
+                        detailDoc.querySelectorAll('script, style, iframe, header, footer, nav, noscript').forEach(el => el.remove());
+                        analysisText = detailDoc.body.innerText.slice(0, 3000);
+                        usedUrl = gameDetailUrl;
+                    }
+                } catch (detailErr) {
+                    console.warn("Failed to scrape detailed matchup page, using top page summary instead:", detailErr);
+                }
+            }
+            
+            const prompt = `以下のテキスト（Yahoo!スポーツのプロ野球速報ページ）を分析し、本日の阪神タイガースの試合状況を抽出して、必ず指定のJSONオブジェクト1つだけを返してください。前後の説明やマークダウンタグ(\`\`\`)は一切含めないでください。
+本日に阪神戦が開催されていない、または試合時間外の場合は \`playing\` を false にし、lastPlay部分に試合予定や結果概要を記述してください。
+
+【出力JSON構造】
+{
+  "playing": true(試合中)またはfalse(試合前・終了後・試合なし),
+  "opponent": "対戦相手のチーム名 (例: 巨人, 広島, ヤクルト, DeNA, 中日 等)",
+  "score": {"hanshin": 阪神の得点(数値), "opponent": 相手の得点(数値)},
+  "inning": "現在のイニング数字 (例: 8, 9)",
+  "bottom": true(裏・阪神の攻撃)かfalse(表・相手の攻撃),
+  "balls": 現在のボールカウント(0〜3),
+  "strikes": 現在のストライクカウント(0〜2),
+  "outs": 現在のアウトカウント(0〜2),
+  "runners": [1塁走者の有無(true/false), 2塁走者の有無(true/false), 3塁走者の有無(true/false)],
+  "pitcher": "現在の投手名 (例: 才木, 菅野 等)",
+  "batter": "現在の打者名 (例: 近本, 岡本 等)",
+  "lastPlay": "直近のプレー詳細テキスト。試合前の場合は試合開始予定時刻や予告先発、試合終了後の場合は結果概要と勝敗・セーブ投手情報など",
+  "inningScores": {
+    "opponent": [1〜9回の相手の得点。まだ達していない回は空文字列 \"\" とする。9要素の配列],
+    "hanshin": [1〜9回の阪神の得点。同様に9要素の配列]
+  }
+}
+
+【Yahoo!スポーツ テキストデータ (ソース: ${usedUrl})】
+${analysisText}`;
 
             const modelName = 'gemini-3.1-flash-lite';
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${config.apiKey}`;
+            const apiRequestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${config.apiKey}`;
             
             const payload = {
                 contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                tools: [{ googleSearch: {} }],
                 generationConfig: {
-                    temperature: 0.2,
+                    temperature: 0.1,
                     responseMimeType: "application/json"
                 }
             };
             
-            const response = await fetch(url, {
+            const apiRes = await fetch(apiRequestUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             
-            if (!response.ok) {
-                throw new Error(`HTTP error ${response.status}`);
-            }
+            if (!apiRes.ok) throw new Error(`Gemini API returned status ${apiRes.status}`);
             
-            const data = await response.json();
-            let resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!resultText) {
-                throw new Error("Empty API response");
-            }
+            const apiData = await apiRes.json();
+            let resultText = apiData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!resultText) throw new Error("Empty Gemini response");
             
-            // Clean up codeblock markers if Gemini included them
             resultText = resultText.trim();
             if (resultText.startsWith("```")) {
                 resultText = resultText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
@@ -2980,7 +3039,7 @@ async function fetchBaseballData(isManual = false) {
             const parsed = JSON.parse(resultText);
             renderBaseballUI(parsed);
         } catch (err) {
-            console.warn("Baseball API fetch failed, falling back to mock updates:", err);
+            console.warn("Yahoo scraping + Gemini parsing failed, falling back to mock simulation:", err);
             updateBaseballMockData();
             renderBaseballUI(mockBaseballState);
         }
