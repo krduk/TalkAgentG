@@ -1310,14 +1310,14 @@ input[type="checkbox"]:checked + .switch-slider::after {
 .baseball-tabs {
     display: flex;
     gap: 4px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     width: 100%;
 }
 
 .baseball-tabs .tab-btn {
     flex: 1;
-    padding: 2px 4px;
-    font-size: 0.72rem;
+    padding: 2px 2px;
+    font-size: 0.68rem;
     text-align: center;
     cursor: pointer;
     background: transparent;
@@ -1341,28 +1341,28 @@ input[type="checkbox"]:checked + .switch-slider::after {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 3px 6px;
+    padding: 3px 5px;
     border: 1px solid rgba(51, 255, 51, 0.2);
     background: rgba(0, 0, 0, 0.2);
-    gap: 8px;
+    gap: 4px;
     margin-bottom: 2px;
 }
 
 #baseballDetailTab .game-info-col {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     flex: 1;
 }
 
 #baseballDetailTab .player-matchup {
     font-size: 0.65rem;
-    padding: 3px 5px;
+    padding: 2px 4px;
     background: rgba(0, 0, 0, 0.3);
     color: var(--retro-green);
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     border-left: 1px dashed rgba(51, 255, 51, 0.2);
     align-items: flex-start;
     flex: 0 0 auto;
@@ -1372,7 +1372,7 @@ input[type="checkbox"]:checked + .switch-slider::after {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 75px;
+    max-width: 70px;
 }
 
 /* Mobile adjustments (width <= 900px) for baseball mode */
@@ -1392,26 +1392,30 @@ input[type="checkbox"]:checked + .switch-slider::after {
     }
     
     .portrait-section.baseball-active #baseballPanel {
-        padding: 6px 10px !important;
-        gap: 4px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
     }
     
     .portrait-section.baseball-active .scoreboard-table {
-        font-size: 0.62rem !important;
-    }
-    
-    .portrait-section.baseball-active #baseballDetailTab .game-detail-grid {
-        padding: 2px 4px !important;
-        gap: 4px !important;
-    }
-    
-    .portrait-section.baseball-active #baseballDetailTab .player-matchup {
-        padding-left: 4px !important;
         font-size: 0.6rem !important;
     }
     
+    .portrait-section.baseball-active #baseballDetailTab .game-detail-grid {
+        padding: 1px 3px !important;
+        gap: 3px !important;
+    }
+    
+    .portrait-section.baseball-active #baseballDetailTab .player-matchup {
+        padding-left: 3px !important;
+        font-size: 0.58rem !important;
+    }
+
+    .portrait-section.baseball-active #baseballDetailTab .player-matchup div {
+        max-width: 60px !important;
+    }
+    
     .portrait-section.baseball-active .runners-diamond {
-        width: 48px !important;
-        height: 48px !important;
+        width: 42px !important;
+        height: 42px !important;
     }
 }

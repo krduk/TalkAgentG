@@ -2838,7 +2838,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.10';
+    const v = '?v=2.11';
     
     // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
     if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
