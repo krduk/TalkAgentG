@@ -1138,10 +1138,12 @@ input[type="checkbox"]:checked + .switch-slider::after {
    ========================================== */
 #baseballPanel {
     font-family: 'DotGothic16', monospace;
+    padding: 8px 12px;
+    gap: 6px;
 }
 
 .scoreboard {
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     background: #000;
     overflow-x: auto;
 }
@@ -1149,14 +1151,14 @@ input[type="checkbox"]:checked + .switch-slider::after {
 .scoreboard-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     text-align: center;
     color: var(--retro-green);
 }
 
 .scoreboard-table th, .scoreboard-table td {
     border: 1px solid rgba(51, 255, 51, 0.3);
-    padding: 3px 2px;
+    padding: 2px 1px;
 }
 
 .scoreboard-table th {
@@ -1173,8 +1175,8 @@ input[type="checkbox"]:checked + .switch-slider::after {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
-    padding: 4px;
+    margin-bottom: 4px;
+    padding: 3px 6px;
     border: 1px solid rgba(51, 255, 51, 0.2);
     background: rgba(0, 0, 0, 0.2);
 }
@@ -1182,11 +1184,11 @@ input[type="checkbox"]:checked + .switch-slider::after {
 .game-info-col {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
 }
 
 .inning-display {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--retro-cyan);
     font-weight: bold;
 }
@@ -1194,8 +1196,8 @@ input[type="checkbox"]:checked + .switch-slider::after {
 .bsos-display {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    font-size: 0.75rem;
+    gap: 1px;
+    font-size: 0.7rem;
 }
 
 .bso-row {
@@ -1205,12 +1207,12 @@ input[type="checkbox"]:checked + .switch-slider::after {
 }
 
 .bso-label {
-    width: 15px;
+    width: 12px;
     font-weight: bold;
 }
 
 .bso-dots {
-    letter-spacing: 2px;
+    letter-spacing: 1px;
 }
 
 .bso-dots .dot-active {
@@ -1226,18 +1228,18 @@ input[type="checkbox"]:checked + .switch-slider::after {
 .bso-row:nth-child(2) .dot-active { color: #ffcc00; } /* Strike: Yellow/Amber */
 .bso-row:nth-child(3) .dot-active { color: #ff3333; } /* Out: Red */
 
-/* Runners Diamond Visualizer */
+/* Runners Diamond Visualizer - Perfectly aligned */
 .runners-diamond {
-    width: 60px;
-    height: 60px;
+    width: 64px;
+    height: 64px;
     display: flex;
     justify-content: center;
     align-items: center;
 }
 
 .diamond {
-    width: 36px;
-    height: 36px;
+    width: 42px;
+    height: 42px;
     border: 1px dashed rgba(51, 255, 51, 0.4);
     transform: rotate(45deg);
     position: relative;
@@ -1250,42 +1252,49 @@ input[type="checkbox"]:checked + .switch-slider::after {
     border: 1px solid var(--retro-green);
     position: absolute;
     box-sizing: border-box;
-}
-
-.first-base {
-    top: 14px;
-    right: -4px;
+    transform: rotate(-45deg);
+    z-index: 2;
 }
 
 .second-base {
     top: -4px;
-    left: 14px;
-}
-
-.third-base {
-    top: 14px;
     left: -4px;
 }
 
-.home-plate {
-    width: 6px;
-    height: 6px;
-    background: var(--retro-green);
-    position: absolute;
-    bottom: -3px;
-    left: 15px;
-    transform: scale(0.8);
+.third-base {
+    bottom: -4px;
+    left: -4px;
 }
 
-.base.active {
+.first-base {
+    top: -4px;
+    right: -4px;
+}
+
+.home-plate {
+    width: 8px;
+    height: 8px;
+    background: #000;
+    border: 1px solid var(--retro-green);
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    transform: rotate(-45deg);
+    clip-path: polygon(50% 0%, 100% 38%, 100% 100%, 0% 100%, 0% 38%);
+    box-sizing: border-box;
+    z-index: 2;
+}
+
+.base.active, .home-plate.active {
     background: var(--retro-amber);
     box-shadow: 0 0 5px var(--retro-amber);
+    border-color: var(--retro-amber);
 }
 
 .player-matchup {
-    font-size: 0.75rem;
-    padding: 4px 8px;
-    margin-bottom: 8px;
+    font-size: 0.72rem;
+    padding: 3px 6px;
+    margin-bottom: 4px;
     background: rgba(0, 0, 0, 0.3);
     color: var(--retro-green);
     display: flex;
@@ -1293,16 +1302,16 @@ input[type="checkbox"]:checked + .switch-slider::after {
 }
 
 .last-play-box {
-    padding: 6px;
+    padding: 4px 6px;
     background: rgba(0, 0, 0, 0.4);
-    font-size: 0.75rem;
-    min-height: 40px;
-    margin-bottom: 8px;
+    font-size: 0.72rem;
+    min-height: 36px;
+    margin-bottom: 4px;
 }
 
 .last-play-title {
     color: var(--retro-cyan);
-    margin-bottom: 2px;
+    margin-bottom: 1px;
 }
 
 .last-play-content {
@@ -1313,34 +1322,6 @@ input[type="checkbox"]:checked + .switch-slider::after {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     color: rgba(51, 255, 51, 0.5);
-}
-
-/* Baseball Cap Overlay positioning and animation */
-.baseball-cap-overlay {
-    position: absolute;
-    top: -5px; /* adjust vertical position on head */
-    left: 50%;
-    transform: translateX(-50%) scale(0.65); /* adjust scale to fit head */
-    width: 100%;
-    height: auto;
-    mix-blend-mode: screen; /* hides black background, reveals green cap */
-    pointer-events: none;
-    z-index: 10;
-}
-
-.baseball-cap-overlay.putting-on {
-    animation: putOnCap 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-}
-
-@keyframes putOnCap {
-    0% {
-        transform: translateX(-50%) translateY(-100px) rotate(-15deg) scale(0.65);
-        opacity: 0;
-    }
-    100% {
-        transform: translateX(-50%) translateY(0) rotate(0deg) scale(0.65);
-        opacity: 1;
-    }
 }

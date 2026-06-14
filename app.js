@@ -46,6 +46,7 @@ let musicAudio = null;
 
 // Baseball Mode State
 let isBaseballMode = false;
+let isPuttingBaseballCap = false;
 let baseballTimer = null;
 let baseballCountdown = 30;
 let baseballCountdownInterval = null;
@@ -92,7 +93,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.06] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.07] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -109,7 +110,7 @@ async function init() {
     initMusicPlayer();
     preloadMusicPortraits();
     await restorePlayerState();
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.06] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.07] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -2818,6 +2819,18 @@ function updatePortraitUI() {
     // Cache buster to force browsers to reload newly overwritten images instantly
     const v = '?v=10';
     
+    // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
+    if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
+        portrait.src = 'assets/elena_mono_put_headphones.jpg' + v;
+        return;
+    }
+    
+    // 野球モードの場合は野球帽をかぶった画像を表示
+    if (isBaseballMode) {
+        portrait.src = 'assets/elena_mono_baseball.jpg' + v;
+        return;
+    }
+    
     if (isPuttingHeadphones || isRemovingHeadphones) {
         portrait.src = 'assets/elena_mono_put_headphones.jpg' + v;
         return;
@@ -2849,6 +2862,8 @@ function updatePortraitUI() {
 // ==========================================
 
 function enableBaseballMode() {
+    // Show cap putting-on animation for 0.8s
+    isPuttingBaseballCap = true;
     isBaseballMode = true;
     
     // Switch UI panels
@@ -2857,17 +2872,13 @@ function enableBaseballMode() {
     if (musicPanel) musicPanel.style.display = 'none';
     if (baseballPanel) baseballPanel.style.display = 'flex';
     
-    // Show cap overlay with animation
-    const capOverlay = document.getElementById('baseballCapOverlay');
-    if (capOverlay) {
-        capOverlay.style.display = 'block';
-        capOverlay.classList.remove('putting-on');
-        void capOverlay.offsetWidth; // Trigger reflow
-        capOverlay.classList.add('putting-on');
-    }
-    
-    // Update portrait
+    // Update portrait for transition animation
     updatePortraitUI();
+    
+    setTimeout(() => {
+        isPuttingBaseballCap = false;
+        updatePortraitUI();
+    }, 800);
     
     // Trigger initial fetch
     fetchBaseballData();
@@ -2885,14 +2896,7 @@ function disableBaseballMode() {
     if (musicPanel) musicPanel.style.display = 'flex';
     if (baseballPanel) baseballPanel.style.display = 'none';
     
-    // Hide cap overlay
-    const capOverlay = document.getElementById('baseballCapOverlay');
-    if (capOverlay) {
-        capOverlay.style.display = 'none';
-        capOverlay.classList.remove('putting-on');
-    }
-    
-    // Update portrait
+    // Update portrait (Luna takes off the cap)
     updatePortraitUI();
     
     // Stop intervals
