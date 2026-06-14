@@ -31,7 +31,7 @@
             <!-- Header (Retro BIOS Style) -->
             <header class="app-header">
                 <div class="logo-area">
-                    <span class="logo-text">>_ C.O.S.M.O.S.<span class="hide-mobile"> SYSTEM [ROM v2.07]</span></span>
+                    <span class="logo-text">>_ C.O.S.M.O.S.<span class="hide-mobile"> SYSTEM [ROM v2.08]</span></span>
                 </div>
                 <div class="system-status">
                     <span class="status-indicator online"></span>
@@ -164,12 +164,13 @@
                                 </div>
                                 
                                 <div class="runners-diamond">
-                                    <div class="diamond">
-                                        <div id="base2" class="base second-base"></div>
-                                        <div id="base3" class="base third-base"></div>
-                                        <div id="base1" class="base first-base"></div>
-                                        <div class="home-plate"></div>
-                                    </div>
+                                    <svg class="diamond-svg" viewBox="0 0 64 64" width="64" height="64">
+                                        <polygon points="32,8 56,32 32,56 8,32" class="diamond-line" />
+                                        <rect id="base2" x="28" y="4" width="8" height="8" transform="rotate(45 32 8)" class="base-rect" />
+                                        <rect id="base3" x="4" y="28" width="8" height="8" transform="rotate(45 8 32)" class="base-rect" />
+                                        <rect id="base1" x="52" y="28" width="8" height="8" transform="rotate(45 56 32)" class="base-rect" />
+                                        <polygon id="baseHome" points="28,52 36,52 36,56 32,60 28,56" class="base-home" />
+                                    </svg>
                                 </div>
                             </div>
                             

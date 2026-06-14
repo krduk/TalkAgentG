@@ -2817,7 +2817,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=10';
+    const v = '?v=2.08';
     
     // 帽子をかぶる動作中、またはヘッドホン着脱のアニメーション中
     if (isPuttingBaseballCap || isPuttingHeadphones || isRemovingHeadphones) {
@@ -2869,8 +2869,10 @@ function enableBaseballMode() {
     // Switch UI panels
     const musicPanel = document.getElementById('musicPlayerPanel');
     const baseballPanel = document.getElementById('baseballPanel');
+    const portraitSection = document.querySelector('.portrait-section');
     if (musicPanel) musicPanel.style.display = 'none';
     if (baseballPanel) baseballPanel.style.display = 'flex';
+    if (portraitSection) portraitSection.classList.add('baseball-active');
     
     // Update portrait for transition animation
     updatePortraitUI();
@@ -2893,8 +2895,10 @@ function disableBaseballMode() {
     // Switch UI panels
     const musicPanel = document.getElementById('musicPlayerPanel');
     const baseballPanel = document.getElementById('baseballPanel');
+    const portraitSection = document.querySelector('.portrait-section');
     if (musicPanel) musicPanel.style.display = 'flex';
     if (baseballPanel) baseballPanel.style.display = 'none';
+    if (portraitSection) portraitSection.classList.remove('baseball-active');
     
     // Update portrait (Luna takes off the cap)
     updatePortraitUI();

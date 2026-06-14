@@ -1228,7 +1228,7 @@ input[type="checkbox"]:checked + .switch-slider::after {
 .bso-row:nth-child(2) .dot-active { color: #ffcc00; } /* Strike: Yellow/Amber */
 .bso-row:nth-child(3) .dot-active { color: #ff3333; } /* Out: Red */
 
-/* Runners Diamond Visualizer - Perfectly aligned */
+/* Runners Diamond SVG Visualizer - Perfectly aligned */
 .runners-diamond {
     width: 64px;
     height: 64px;
@@ -1237,58 +1237,35 @@ input[type="checkbox"]:checked + .switch-slider::after {
     align-items: center;
 }
 
-.diamond {
-    width: 42px;
-    height: 42px;
-    border: 1px dashed rgba(51, 255, 51, 0.4);
-    transform: rotate(45deg);
-    position: relative;
+.diamond-svg {
+    width: 100%;
+    height: 100%;
 }
 
-.base {
-    width: 8px;
-    height: 8px;
-    background: #000;
-    border: 1px solid var(--retro-green);
-    position: absolute;
-    box-sizing: border-box;
-    transform: rotate(-45deg);
-    z-index: 2;
+.diamond-line {
+    fill: none;
+    stroke: rgba(51, 255, 51, 0.4);
+    stroke-width: 1.5px;
+    stroke-dasharray: 2, 2;
 }
 
-.second-base {
-    top: -4px;
-    left: -4px;
+.base-rect {
+    fill: #000000;
+    stroke: var(--retro-green);
+    stroke-width: 1.2px;
+    transition: fill 0.2s, stroke 0.2s, filter 0.2s;
 }
 
-.third-base {
-    bottom: -4px;
-    left: -4px;
+.base-rect.active {
+    fill: var(--retro-amber);
+    stroke: var(--retro-amber);
+    filter: drop-shadow(0 0 3px var(--retro-amber));
 }
 
-.first-base {
-    top: -4px;
-    right: -4px;
-}
-
-.home-plate {
-    width: 8px;
-    height: 8px;
-    background: #000;
-    border: 1px solid var(--retro-green);
-    position: absolute;
-    bottom: -4px;
-    right: -4px;
-    transform: rotate(-45deg);
-    clip-path: polygon(50% 0%, 100% 38%, 100% 100%, 0% 100%, 0% 38%);
-    box-sizing: border-box;
-    z-index: 2;
-}
-
-.base.active, .home-plate.active {
-    background: var(--retro-amber);
-    box-shadow: 0 0 5px var(--retro-amber);
-    border-color: var(--retro-amber);
+.base-home {
+    fill: #000000;
+    stroke: var(--retro-green);
+    stroke-width: 1.2px;
 }
 
 .player-matchup {
@@ -1324,4 +1301,104 @@ input[type="checkbox"]:checked + .switch-slider::after {
     align-items: center;
     font-size: 0.68rem;
     color: rgba(51, 255, 51, 0.5);
+}
+
+/* ==========================================
+   BASEBALL RESPONSIVE & LAYOUT OPTIMIZATIONS
+   ========================================== */
+
+/* Low height screen adjustments for desktop to prevent overflow */
+@media (max-height: 800px) and (min-width: 901px) {
+    .portrait-section {
+        max-width: 230px;
+    }
+    #baseballPanel {
+        gap: 3px;
+        padding: 6px 10px;
+    }
+    .scoreboard-table {
+        font-size: 0.65rem;
+    }
+    .game-detail-grid {
+        padding: 2px 4px;
+        margin-bottom: 2px;
+    }
+    .runners-diamond {
+        width: 56px;
+        height: 56px;
+    }
+    .player-matchup {
+        padding: 2px 6px;
+        margin-bottom: 2px;
+        font-size: 0.68rem;
+    }
+    .last-play-box {
+        padding: 3px 6px;
+        min-height: 28px;
+        font-size: 0.68rem;
+        margin-bottom: 2px;
+    }
+}
+
+@media (max-height: 700px) and (min-width: 901px) {
+    .portrait-section {
+        max-width: 190px;
+    }
+    #baseballPanel {
+        gap: 2px;
+        padding: 4px 8px;
+    }
+    .scoreboard-table {
+        font-size: 0.6rem;
+    }
+    .game-detail-grid {
+        padding: 1px 3px;
+        margin-bottom: 1px;
+    }
+    .runners-diamond {
+        width: 48px;
+        height: 48px;
+    }
+    .player-matchup {
+        padding: 1px 5px;
+        margin-bottom: 1px;
+        font-size: 0.65rem;
+    }
+    .last-play-box {
+        padding: 2px 5px;
+        min-height: 24px;
+        font-size: 0.65rem;
+        margin-bottom: 1px;
+    }
+}
+
+/* Mobile & Tablet adjustments for Baseball Mode */
+@media (max-width: 900px) {
+    .portrait-section.baseball-active {
+        height: auto;
+        flex-direction: column;
+        max-width: 100%;
+        flex: 0 0 auto;
+        border: 4px double var(--retro-cyan);
+    }
+    .portrait-section.baseball-active .portrait-container {
+        width: 100%;
+        height: 120px;
+        aspect-ratio: auto;
+        border-bottom: 4px double var(--retro-cyan);
+        border-right: none;
+    }
+    .portrait-section.baseball-active #baseballPanel {
+        flex: none;
+        height: auto;
+        padding: 10px 12px;
+        gap: 8px;
+    }
+    .portrait-section.baseball-active .scoreboard-table {
+        font-size: 0.75rem;
+    }
+    .portrait-section.baseball-active .runners-diamond {
+        width: 64px;
+        height: 64px;
+    }
 }
