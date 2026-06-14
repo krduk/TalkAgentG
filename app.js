@@ -93,7 +93,7 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 
 // Initialize App
 async function init() {
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.19] Initializing...");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.20] Initializing...");
     loadSettings();
     setupEventListeners();
     updateUIFromSettings();
@@ -119,7 +119,7 @@ async function init() {
         disableBaseballMode(true);
     }
     
-    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.19] Ready.");
+    console.log("C.O.S.M.O.S. SYSTEM [ROM v2.20] Ready.");
 }
 
 function preloadMusicPortraits() {
@@ -2849,7 +2849,7 @@ function updatePortraitUI() {
     }
     
     // Cache buster to force browsers to reload newly overwritten images instantly
-    const v = '?v=2.19';
+    const v = '?v=2.20';
     
     // 帽子をかぶる動作中、または帽子を脱ぐ動作中
     if (isPuttingBaseballCap || isRemovingBaseballCap) {
@@ -3030,6 +3030,7 @@ ${analysisText}`;
                             resultText = resultText.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
                         }
                         const parsed = JSON.parse(resultText);
+                        parsed.hanshinFirst = domData ? domData.hanshinFirst : true;
                         renderBaseballUI(parsed);
                         return;
                     }
@@ -3053,6 +3054,7 @@ ${analysisText}`;
             inning: 1,
             bottom: false,
             hanshinOffense: false,
+            hanshinFirst: true,
             balls: 0, strikes: 0, outs: 0,
             runners: [false, false, false],
             pitcher: "-", batter: "-",
@@ -3256,6 +3258,7 @@ function parseYahooTopPageDOM(doc) {
         inning: currentInning,
         bottom: isNowBottom,
         hanshinOffense: isHanshinOffense,
+        hanshinFirst: isRow1Hanshin,
         balls: 0, strikes: 0, outs: 0,
         runners: [false, false, false],
         pitcher: "-",
@@ -3293,6 +3296,7 @@ function parseYahooPreGameDOM(doc) {
         inning: 1,
         bottom: false,
         hanshinOffense: false,
+        hanshinFirst: true,
         balls: 0, strikes: 0, outs: 0,
         runners: [false, false, false],
         pitcher: "-",
@@ -3311,8 +3315,12 @@ function renderBaseballUI(data) {
     
     // Set team name
     const oppName = data.opponent || "対戦相手";
-    const oppLabel = document.getElementById('opponentNameLabel');
-    if (oppLabel) oppLabel.textContent = oppName;
+    const isHanshinFirst = data.hanshinFirst ?? true;
+    
+    const topNameLabel = document.getElementById('topNameLabel');
+    const bottomNameLabel = document.getElementById('bottomNameLabel');
+    if (topNameLabel) topNameLabel.textContent = isHanshinFirst ? "阪神" : oppName;
+    if (bottomNameLabel) bottomNameLabel.textContent = isHanshinFirst ? oppName : "阪神";
     
     // Render Inning
     const inningDisplay = document.getElementById('inningDisplay');
@@ -3359,46 +3367,51 @@ function renderBaseballUI(data) {
     if (b3) { if (runners[2]) b3.classList.add('active'); else b3.classList.remove('active'); }
     
     // Render Scoreboard Runs / Hits / Errors
-    const oppRunsEl = document.getElementById('oppRuns');
-    const hanRunsEl = document.getElementById('hanRuns');
-    if (oppRunsEl) oppRunsEl.textContent = data.score?.opponent ?? 0;
-    if (hanRunsEl) hanRunsEl.textContent = data.score?.hanshin ?? 0;
+    const topRunsEl = document.getElementById('topRuns');
+    const bottomRunsEl = document.getElementById('bottomRuns');
+    const hanRuns = data.score?.hanshin ?? 0;
+    const oppRuns = data.score?.opponent ?? 0;
+    if (topRunsEl) topRunsEl.textContent = isHanshinFirst ? hanRuns : oppRuns;
+    if (bottomRunsEl) bottomRunsEl.textContent = isHanshinFirst ? oppRuns : hanRuns;
     
     // Scoreboard Columns
     if (data.inningScores) {
         for (let i = 1; i <= 9; i++) {
-            const oppCell = document.getElementById(`opp${i}`);
-            const hanCell = document.getElementById(`han${i}`);
+            const topCell = document.getElementById(`top${i}`);
+            const bottomCell = document.getElementById(`bottom${i}`);
             
-            const oppScore = data.inningScores.opponent[i - 1];
             const hanScore = data.inningScores.hanshin[i - 1];
+            const oppScore = data.inningScores.opponent[i - 1];
             
-            if (oppCell) oppCell.textContent = (oppScore !== undefined && oppScore !== "") ? oppScore : "-";
-            if (hanCell) hanCell.textContent = (hanScore !== undefined && hanScore !== "") ? hanScore : "-";
+            const topScore = isHanshinFirst ? hanScore : oppScore;
+            const bottomScore = isHanshinFirst ? oppScore : hanScore;
+            
+            if (topCell) topCell.textContent = (topScore !== undefined && topScore !== "") ? topScore : "-";
+            if (bottomCell) bottomCell.textContent = (bottomScore !== undefined && bottomScore !== "") ? bottomScore : "-";
         }
     } else {
         const currentInning = parseInt(data.inning) || 1;
         for (let i = 1; i <= 9; i++) {
-            const oppCell = document.getElementById(`opp${i}`);
-            const hanCell = document.getElementById(`han${i}`);
+            const topCell = document.getElementById(`top${i}`);
+            const bottomCell = document.getElementById(`bottom${i}`);
             
-            if (oppCell) {
+            if (topCell) {
                 if (i < currentInning) {
-                    oppCell.textContent = "0";
+                    topCell.textContent = isHanshinFirst ? hanRuns : oppRuns;
                 } else if (i === currentInning && !data.bottom) {
-                    oppCell.textContent = data.score?.opponent ?? 0;
+                    topCell.textContent = isHanshinFirst ? hanRuns : oppRuns;
                 } else {
-                    oppCell.textContent = "-";
+                    topCell.textContent = "-";
                 }
             }
             
-            if (hanCell) {
+            if (bottomCell) {
                 if (i < currentInning) {
-                    hanCell.textContent = "0";
+                    bottomCell.textContent = isHanshinFirst ? oppRuns : hanRuns;
                 } else if (i === currentInning && data.bottom) {
-                    hanCell.textContent = data.score?.hanshin ?? 0;
+                    bottomCell.textContent = isHanshinFirst ? oppRuns : hanRuns;
                 } else {
-                    hanCell.textContent = "-";
+                    bottomCell.textContent = "-";
                 }
             }
         }
